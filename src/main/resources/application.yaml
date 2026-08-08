@@ -32,6 +32,22 @@ spring:
     # EXTERNAL listener of the docker-compose Kafka broker (see docker-compose.yml). Tests
     # override this via Testcontainers' @ServiceConnection, never talking to this address.
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: insurance-ai-document-processor
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # Wraps JsonDeserializer so a malformed record is handed to the error handler instead of
+      # crashing the consumer thread.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        # Only this package's events may be deserialized - defensive against deserializing
+        # arbitrary classes from untrusted producers (brief section 19's spirit applied to
+        # messaging, not just LLM input).
+        spring.json.trusted.packages: com.rag.springai.insuranceai.adapters.shared.messaging
 
 insurance-ai:
   rag:

@@ -132,6 +132,14 @@
             <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <!-- Polls for the async Kafka-driven pipeline (upload -> processed) to complete in
+                 integration tests, instead of hand-rolled sleep loops. Version managed by
+                 spring-boot-starter-parent's dependency management. -->
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>

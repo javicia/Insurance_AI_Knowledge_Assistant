@@ -3,7 +3,7 @@ package com.rag.springai.insuranceai.adapters.inbound.rest;
 import com.rag.springai.insuranceai.application.shared.exception.ApplicationException;
 import com.rag.springai.insuranceai.domain.shared.TraceId;
 import com.rag.springai.insuranceai.domain.shared.exception.DomainException;
-import com.rag.springai.insuranceai.adapters.shared.exception.InfrastructureException;
+import com.rag.springai.insuranceai.domain.shared.exception.InfrastructureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
