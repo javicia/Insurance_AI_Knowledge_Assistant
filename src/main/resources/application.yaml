@@ -1,3 +1,49 @@
 spring:
   application:
-    name: rag_springai_prueba
+    name: insurance-knowledge-assistant
+  ai:
+    # Spring AI's OpenAI/Anthropic auto-configuration requires a non-empty credential to
+    # even build its client beans, regardless of whether a model call is ever made. No
+    # LlmProvider adapter calls either SDK yet (FASE 7) - the placeholder below only lets the
+    # application context boot cleanly in local/CI environments without real API keys. Real
+    # keys are supplied via the OPENAI_API_KEY / ANTHROPIC_API_KEY environment variables
+    # (see .env.example) and never committed. TEMPORARY: revisit in FASE 7, when the
+    # LlmProvider adapters are implemented, so that configuring OpenAI is not mandatory when
+    # only Anthropic is used, and vice versa (conditional provider initialization) - see the
+    # FASE 1 decisions log in PROJECT_DISCOVERY.md.
+    openai:
+      api-key: ${OPENAI_API_KEY:not-configured}
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:not-configured}
+    vectorstore:
+      pgvector:
+        # Schema ownership belongs to Flyway (db/migration), not Spring AI's own schema
+        # auto-initialization: the vector_store table itself is created by a dedicated
+        # V3__vector_store.sql migration once the VectorStore adapter is implemented in
+        # FASE 5, not by this starter reaching for the database on its own (brief section 36).
+        initialize-schema: false
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/insurance_ai}
+    username: ${POSTGRES_USER:insurance_ai}
+    password: ${POSTGRES_PASSWORD:insurance_ai}
+  flyway:
+    enabled: true
+  kafka:
+    # EXTERNAL listener of the docker-compose Kafka broker (see docker-compose.yml). Tests
+    # override this via Testcontainers' @ServiceConnection, never talking to this address.
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+
+insurance-ai:
+  rag:
+    top-k: 8
+    similarity-threshold: 0.75
+  security:
+    prompt-injection:
+      enabled: true
+    pii:
+      enabled: true
+  governance:
+    audit:
+      enabled: true
+  ai:
+    provider: openai

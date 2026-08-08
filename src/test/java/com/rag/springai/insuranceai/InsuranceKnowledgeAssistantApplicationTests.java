@@ -1,4 +1,4 @@
-package com.rag.springai.rag_springai_prueba;
+package com.rag.springai.insuranceai;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -6,10 +6,10 @@ import org.springframework.context.annotation.Import;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
-class RagSpringaiPruebaApplicationTests {
+class InsuranceKnowledgeAssistantApplicationTests {
 
-	@Test
-	void contextLoads() {
-	}
+    @Test
+    void contextLoads() {
+    }
 
 }
