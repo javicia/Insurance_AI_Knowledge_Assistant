@@ -1,5 +1,6 @@
 package com.rag.springai.insuranceai.adapters.outbound.messaging;
 
+import com.rag.springai.insuranceai.adapters.shared.messaging.DocumentEmbeddedEvent;
 import com.rag.springai.insuranceai.adapters.shared.messaging.DocumentProcessedEvent;
 import com.rag.springai.insuranceai.adapters.shared.messaging.DocumentTopics;
 import com.rag.springai.insuranceai.adapters.shared.messaging.DocumentUploadedEvent;
@@ -36,5 +37,12 @@ public class KafkaDocumentEventPublisher implements DocumentEventPublisher {
             int chunkCount) {
         kafkaTemplate.send(DocumentTopics.DOCUMENT_PROCESSED, documentVersionId.toString(),
                 new DocumentProcessedEvent(documentId.toString(), documentVersionId.toString(), chunkCount));
+    }
+
+    @Override
+    public void publishDocumentEmbedded(DocumentId documentId, DocumentVersionId documentVersionId,
+            int chunkCount) {
+        kafkaTemplate.send(DocumentTopics.DOCUMENT_EMBEDDED, documentVersionId.toString(),
+                new DocumentEmbeddedEvent(documentId.toString(), documentVersionId.toString(), chunkCount));
     }
 }

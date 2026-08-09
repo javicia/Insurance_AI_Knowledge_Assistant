@@ -19,8 +19,12 @@ final class RecordingDocumentEventPublisher implements DocumentEventPublisher {
     record ProcessedEvent(DocumentId documentId, DocumentVersionId documentVersionId, int chunkCount) {
     }
 
+    record EmbeddedEvent(DocumentId documentId, DocumentVersionId documentVersionId, int chunkCount) {
+    }
+
     final List<UploadedEvent> uploadedEvents = new ArrayList<>();
     final List<ProcessedEvent> processedEvents = new ArrayList<>();
+    final List<EmbeddedEvent> embeddedEvents = new ArrayList<>();
 
     @Override
     public void publishDocumentUploaded(DocumentId documentId, DocumentVersionId documentVersionId,
@@ -32,5 +36,11 @@ final class RecordingDocumentEventPublisher implements DocumentEventPublisher {
     public void publishDocumentProcessed(DocumentId documentId, DocumentVersionId documentVersionId,
             int chunkCount) {
         processedEvents.add(new ProcessedEvent(documentId, documentVersionId, chunkCount));
+    }
+
+    @Override
+    public void publishDocumentEmbedded(DocumentId documentId, DocumentVersionId documentVersionId,
+            int chunkCount) {
+        embeddedEvents.add(new EmbeddedEvent(documentId, documentVersionId, chunkCount));
     }
 }

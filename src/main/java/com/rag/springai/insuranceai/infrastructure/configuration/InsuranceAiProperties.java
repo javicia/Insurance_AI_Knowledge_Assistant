@@ -55,11 +55,17 @@ public record InsuranceAiProperties(Rag rag, Security security, Governance gover
 
     /**
      * Selects which {@code LlmProvider} port implementation is wired at startup (brief
-     * section 16). Kept separate from the future {@code LlmProvider} port itself so that
+     * section 16). Kept separate from the {@code LlmProvider} port itself so that
      * configuration parsing never depends on the port/adapter code it selects between.
+     *
+     * <p>{@code FAKE} selects a deterministic, offline adapter
+     * ({@code adapters.outbound.llm.FakeLlmAdapter}) used only by the automated test suite and
+     * by manual end-to-end validation when no real provider credentials are available (brief
+     * section 17/18) - never a production option, and never claimed as "provider validated".
      */
     public enum SupportedAiProvider {
         OPENAI,
-        ANTHROPIC
+        ANTHROPIC,
+        FAKE
     }
 }

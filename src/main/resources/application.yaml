@@ -2,17 +2,24 @@ spring:
   application:
     name: insurance-knowledge-assistant
   ai:
-    # Spring AI's OpenAI/Anthropic auto-configuration requires a non-empty credential to
-    # even build its client beans, regardless of whether a model call is ever made. No
-    # LlmProvider adapter calls either SDK yet (FASE 7) - the placeholder below only lets the
-    # application context boot cleanly in local/CI environments without real API keys. Real
-    # keys are supplied via the OPENAI_API_KEY / ANTHROPIC_API_KEY environment variables
-    # (see .env.example) and never committed. TEMPORARY: revisit in FASE 7, when the
-    # LlmProvider adapters are implemented, so that configuring OpenAI is not mandatory when
-    # only Anthropic is used, and vice versa (conditional provider initialization) - see the
-    # FASE 1 decisions log in PROJECT_DISCOVERY.md.
+    # Spring AI's OpenAI/Anthropic auto-configuration requires a non-empty credential to even
+    # build its client beans, regardless of whether a model call is ever made - the placeholder
+    # below only lets the application context boot cleanly without real API keys. Real keys are
+    # supplied via the OPENAI_API_KEY / ANTHROPIC_API_KEY environment variables (see
+    # .env.example) and never committed.
+    #
+    # FASE 5 update: LlmProvider adapter selection (OpenAiLlmAdapter/AnthropicLlmAdapter) is now
+    # conditional on insurance-ai.ai.provider (only the selected one becomes a Spring bean), so
+    # a wrong/missing OpenAI key never breaks an Anthropic-configured deployment's chat flow.
+    # It does NOT remove the OpenAI key requirement entirely, though: embeddings always use
+    # OpenAI regardless of the chat provider, because Anthropic has no embeddings API - see
+    # docs/rag/EMBEDDINGS.md. This is a real technical constraint, not a leftover TODO.
     openai:
       api-key: ${OPENAI_API_KEY:not-configured}
+      embedding:
+        # 1536 dimensions - see docs/rag/EMBEDDINGS.md and V3__vector_store.sql's embedding
+        # column width, which must match exactly.
+        model: text-embedding-3-small
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:not-configured}
     vectorstore:
@@ -51,6 +58,8 @@ spring:
 
 insurance-ai:
   rag:
+    # Initial PoC parameters, not scientifically tuned - to be calibrated against real
+    # relevance/faithfulness metrics in FASE 10 (Evaluation). See docs/rag/RAG_DESIGN.md.
     top-k: 8
     similarity-threshold: 0.75
   security:
@@ -62,4 +71,7 @@ insurance-ai:
     audit:
       enabled: true
   ai:
-    provider: openai
+    # openai | anthropic | fake. "fake" selects deterministic offline adapters for
+    # environments without provider credentials (brief section 17/18) - never use in
+    # production. Overridable so local validation runs don't require editing this file.
+    provider: ${INSURANCE_AI_PROVIDER:openai}
