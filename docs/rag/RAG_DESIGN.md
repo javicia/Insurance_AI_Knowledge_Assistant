@@ -110,6 +110,18 @@ explicitly requires saying so plainly: they were chosen as reasonable starting p
 derived from measurement. They are exactly what FASE 10 (Evaluation) exists to calibrate
 against real relevance/faithfulness metrics on the evaluation dataset built there.
 
+**Production similarity distribution vs. test fake similarity distribution:** `0.75` is
+calibrated against OpenAI's real semantic embeddings, not against `FakeEmbeddingModelAdapter`'s
+bag-of-words hashing (`docs/rag/EMBEDDINGS.md`). The two are not interchangeable: a clearly
+on-topic policy passage/question pair (e.g. "Water damage caused by a burst pipe is covered up
+to the policy limit of 5000 EUR." vs. "Is water damage from a burst pipe covered?") only reaches
+approximately cosine similarity `0.60` under the fake adapter, because word-overlap counting has
+nothing to do with the semantic distribution real embeddings produce. `RagPipelineIntegrationTest`
+therefore overrides `insurance-ai.rag.similarity-threshold` to `0.5` via its own
+`@TestPropertySource` - **scoped to that test only** - so it can exercise the pipeline mechanics
+(retrieval -> grounding -> LLM call) end to end with the offline fake provider. `application.yaml`'s
+production default stays at `0.75` and is never touched to accommodate the fake provider.
+
 ## 5. No-answer strategy
 
 If `VectorSearchPort.search` returns an empty list (no chunk cleared the similarity threshold),

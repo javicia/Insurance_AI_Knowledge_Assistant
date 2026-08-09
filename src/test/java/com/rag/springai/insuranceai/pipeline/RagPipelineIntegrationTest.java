@@ -48,11 +48,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @TestPropertySource(properties = { "insurance-ai.ai.provider=fake",
         // The fake embedding model is a crude word-overlap heuristic (brief section 17/18), not a
         // real semantic embedding: even a clearly on-topic passage/question pair only reaches
-        // ~0.60 cosine similarity under it. insurance-ai.rag.similarity-threshold=0.75 is tuned for
-        // real embeddings (see RAG_DESIGN.md section 4) and would reject that pair here, which
-        // would test the fake adapter's vocabulary limits rather than the pipeline mechanics this
-        // test exists to prove (brief section 21). Lowered only for this test, not production.
-        "insurance-ai.rag.similarity-threshold=0.5" })
+        // ~0.60 cosine similarity under it. insurance-ai.rag.semantic.similarity-threshold=0.75
+        // is tuned for real embeddings (see RAG_DESIGN.md section 4) and would reject that pair
+        // here on the semantic branch alone - lowered only for this test, not production. FASE 6
+        // adds a second, independent grounding path (a genuine PostgreSQL full-text match, see
+        // AskInsuranceKnowledgeUseCase's no-answer policy), so this override is now a belt-and-
+        // braces measure rather than the sole reason these tests pass.
+        "insurance-ai.rag.semantic.similarity-threshold=0.5" })
 class RagPipelineIntegrationTest {
 
     @Autowired

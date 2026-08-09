@@ -7,6 +7,8 @@
  * {@link com.rag.springai.insuranceai.ports.outbound.EmbeddingModelPort},
  * {@link com.rag.springai.insuranceai.ports.outbound.VectorSearchPort},
  * {@link com.rag.springai.insuranceai.ports.outbound.VectorIndexPort} and
- * {@link com.rag.springai.insuranceai.ports.outbound.LlmProvider} (FASE 5).
+ * {@link com.rag.springai.insuranceai.ports.outbound.LlmProvider} (FASE 5),
+ * {@link com.rag.springai.insuranceai.ports.outbound.LexicalSearchPort} and
+ * {@link com.rag.springai.insuranceai.ports.outbound.RerankerPort} (FASE 6).
  */
 package com.rag.springai.insuranceai.ports.outbound;

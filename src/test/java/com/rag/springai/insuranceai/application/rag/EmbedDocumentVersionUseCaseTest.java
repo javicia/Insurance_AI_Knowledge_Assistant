@@ -76,7 +76,8 @@ class EmbedDocumentVersionUseCaseTest {
         useCase.embed(new EmbedDocumentVersionCommand(document.id(), version.id()));
 
         assertEquals(DocumentStatus.EMBEDDED, version.status());
-        verify(vectorIndexPort).index(eq(chunk), any(), eq(descriptor));
+        verify(vectorIndexPort).index(eq(chunk), any(), eq(descriptor), eq(DocumentType.POLICY),
+                eq(DocumentClassification.INTERNAL));
         verify(documentEventPublisher).publishDocumentEmbedded(document.id(), version.id(), 1);
     }
 
@@ -123,7 +124,7 @@ class EmbedDocumentVersionUseCaseTest {
 
         useCase.embed(new EmbedDocumentVersionCommand(document.id(), version.id()));
 
-        verify(vectorIndexPort, times(2)).index(any(), any(), any());
+        verify(vectorIndexPort, times(2)).index(any(), any(), any(), any(), any());
         verify(documentEventPublisher).publishDocumentEmbedded(document.id(), version.id(), 2);
     }
 }

@@ -3,13 +3,17 @@ package com.rag.springai.insuranceai.adapters.outbound.vectorstore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pgvector.PGvector;
+import com.rag.springai.insuranceai.adapters.shared.persistence.RetrievalFilterSql;
 import com.rag.springai.insuranceai.domain.document.ChunkMetadata;
 import com.rag.springai.insuranceai.domain.document.DocumentChunk;
 import com.rag.springai.insuranceai.domain.document.DocumentChunkId;
+import com.rag.springai.insuranceai.domain.document.DocumentClassification;
 import com.rag.springai.insuranceai.domain.document.DocumentId;
+import com.rag.springai.insuranceai.domain.document.DocumentType;
 import com.rag.springai.insuranceai.domain.document.DocumentVersionId;
 import com.rag.springai.insuranceai.domain.rag.EmbeddingModelDescriptor;
 import com.rag.springai.insuranceai.domain.rag.EmbeddingVector;
+import com.rag.springai.insuranceai.domain.rag.RetrievalFilter;
 import com.rag.springai.insuranceai.domain.rag.RetrievedChunk;
 import com.rag.springai.insuranceai.ports.outbound.VectorIndexPort;
 import com.rag.springai.insuranceai.ports.outbound.VectorSearchPort;
@@ -19,6 +23,7 @@ import org.springframework.stereotype.Component;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,8 +59,9 @@ public class PgVectorStoreAdapter implements VectorSearchPort, VectorIndexPort {
     }
 
     @Override
-    public void index(DocumentChunk chunk, EmbeddingVector embedding, EmbeddingModelDescriptor descriptor) {
-        String metadataJson = toJson(chunk, descriptor);
+    public void index(DocumentChunk chunk, EmbeddingVector embedding, EmbeddingModelDescriptor descriptor,
+            DocumentType documentType, DocumentClassification documentClassification) {
+        String metadataJson = toJson(chunk, descriptor, documentType, documentClassification);
         PGvector vector = toPgVector(embedding);
 
         jdbcTemplate.update("""
@@ -68,13 +74,20 @@ public class PgVectorStoreAdapter implements VectorSearchPort, VectorIndexPort {
     }
 
     @Override
-    public List<RetrievedChunk> search(EmbeddingVector queryEmbedding, int topK, double similarityThreshold) {
+    public List<RetrievedChunk> search(EmbeddingVector queryEmbedding, int topK, double similarityThreshold,
+            RetrievalFilter filter) {
         PGvector vector = toPgVector(queryEmbedding);
         double maxDistance = 1.0 - similarityThreshold;
+        StringBuilder filterClause = new StringBuilder();
+        List<Object> filterParams = new ArrayList<>();
+        RetrievalFilterSql.appendConditions(filterClause, filterParams, filter);
         String sql = PgVectorStore.PgDistanceType.COSINE_DISTANCE.similaritySearchSqlTemplate.formatted(TABLE_NAME,
-                "");
+                filterClause.toString());
 
-        return jdbcTemplate.query(sql, this::mapRow, vector, vector, maxDistance, topK);
+        List<Object> params = new ArrayList<>(List.of(vector, vector, maxDistance));
+        params.addAll(filterParams);
+        params.add(topK);
+        return jdbcTemplate.query(sql, this::mapRow, params.toArray());
     }
 
     private PGvector toPgVector(EmbeddingVector vector) {
@@ -85,7 +98,8 @@ public class PgVectorStoreAdapter implements VectorSearchPort, VectorIndexPort {
         return new PGvector(values);
     }
 
-    private String toJson(DocumentChunk chunk, EmbeddingModelDescriptor descriptor) {
+    private String toJson(DocumentChunk chunk, EmbeddingModelDescriptor descriptor, DocumentType documentType,
+            DocumentClassification documentClassification) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("documentId", chunk.documentId().toString());
         metadata.put("documentVersionId", chunk.documentVersionId().toString());
@@ -97,6 +111,10 @@ public class PgVectorStoreAdapter implements VectorSearchPort, VectorIndexPort {
         metadata.put("embeddingModel", descriptor.model());
         metadata.put("embeddingModelVersion", descriptor.modelVersion());
         metadata.put("embeddingDimension", descriptor.dimensions());
+        // FASE 6: denormalized for adapters.shared.persistence.RetrievalFilterSql - see
+        // VectorIndexPort's Javadoc for why this is a deliberate, narrow amendment to ADR-005.
+        metadata.put("documentType", documentType.name());
+        metadata.put("documentClassification", documentClassification.name());
         try {
             return objectMapper.writeValueAsString(metadata);
         }

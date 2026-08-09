@@ -1,6 +1,7 @@
 package com.rag.springai.insuranceai.ports.outbound;
 
 import com.rag.springai.insuranceai.domain.rag.EmbeddingVector;
+import com.rag.springai.insuranceai.domain.rag.RetrievalFilter;
 import com.rag.springai.insuranceai.domain.rag.RetrievedChunk;
 
 import java.util.List;
@@ -12,6 +13,10 @@ import java.util.List;
  * referenced from {@code domain} or {@code application}. Separated from {@link VectorIndexPort}
  * (the write side) so {@code AskInsuranceKnowledgeUseCase} only depends on what it actually
  * needs.
+ *
+ * <p>{@code filter} (FASE 6, brief section 6) restricts by document metadata the same way
+ * {@link LexicalSearchPort#search} does - {@link RetrievalFilter#none()} applies no restriction,
+ * which is exactly FASE 5's original unfiltered behaviour, preserved for backward compatibility.
  */
 public interface VectorSearchPort {
 
@@ -21,5 +26,6 @@ public interface VectorSearchPort {
      * means no chunk was relevant enough - the caller must not call the LLM in that case
      * (brief section 11).
      */
-    List<RetrievedChunk> search(EmbeddingVector queryEmbedding, int topK, double similarityThreshold);
+    List<RetrievedChunk> search(EmbeddingVector queryEmbedding, int topK, double similarityThreshold,
+            RetrievalFilter filter);
 }

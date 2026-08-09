@@ -59,9 +59,31 @@ spring:
 insurance-ai:
   rag:
     # Initial PoC parameters, not scientifically tuned - to be calibrated against real
-    # relevance/faithfulness metrics in FASE 10 (Evaluation). See docs/rag/RAG_DESIGN.md.
-    top-k: 8
-    similarity-threshold: 0.75
+    # relevance/faithfulness metrics in FASE 10 (Evaluation). See docs/rag/HYBRID_SEARCH.md.
+    semantic:
+      top-k: 8
+      # FASE 5's original production value, unchanged - calibrated against real OpenAI
+      # embeddings, never lowered to accommodate the fake/test embedding provider (see
+      # RagPipelineIntegrationTest's own @TestPropertySource override instead).
+      similarity-threshold: 0.75
+    lexical:
+      top-k: 8
+    hybrid:
+      # Candidates carried into reranking, before the final-top-k cut.
+      candidate-pool-size: 20
+      final-top-k: 8
+      # Reciprocal Rank Fusion smoothing constant - 60 is the original RRF paper's (Cormack et
+      # al., 2009) value, a reasonable PoC starting point, not independently re-derived here.
+      rrf-k: 60
+    reranking:
+      enabled: true
+    query-expansion:
+      enabled: false
+      max-expanded-terms: 3
+    context:
+      # PoC approximation of a context window budget - character count, not real token
+      # counting. See docs/rag/HYBRID_SEARCH.md.
+      max-characters: 6000
   security:
     prompt-injection:
       enabled: true

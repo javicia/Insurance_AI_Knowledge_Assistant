@@ -77,7 +77,7 @@ public final class EmbedDocumentVersionUseCase {
             EmbeddingModelDescriptor descriptor = embeddingModelPort.descriptor();
             for (DocumentChunk chunk : chunks) {
                 EmbeddingVector vector = embeddingModelPort.embed(chunk.content().value());
-                vectorIndexPort.index(chunk, vector, descriptor);
+                vectorIndexPort.index(chunk, vector, descriptor, document.type(), document.metadata().classification());
             }
         }
         catch (PermanentProcessingException e) {

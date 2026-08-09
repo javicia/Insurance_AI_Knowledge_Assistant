@@ -5,10 +5,13 @@ import com.rag.springai.insuranceai.domain.document.ChunkContent;
 import com.rag.springai.insuranceai.domain.document.ChunkIndex;
 import com.rag.springai.insuranceai.domain.document.ChunkMetadata;
 import com.rag.springai.insuranceai.domain.document.DocumentChunk;
+import com.rag.springai.insuranceai.domain.document.DocumentClassification;
 import com.rag.springai.insuranceai.domain.document.DocumentId;
+import com.rag.springai.insuranceai.domain.document.DocumentType;
 import com.rag.springai.insuranceai.domain.document.DocumentVersionId;
 import com.rag.springai.insuranceai.domain.rag.EmbeddingModelDescriptor;
 import com.rag.springai.insuranceai.domain.rag.EmbeddingVector;
+import com.rag.springai.insuranceai.domain.rag.RetrievalFilter;
 import com.rag.springai.insuranceai.domain.rag.RetrievedChunk;
 import com.rag.springai.insuranceai.domain.rag.SimilarityMetric;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,12 +74,20 @@ class PgVectorStoreAdapterTest {
                 new ChunkContent(content), metadata);
     }
 
+    private void index(DocumentChunk chunk, EmbeddingVector vector) {
+        adapter.index(chunk, vector, descriptor, DocumentType.POLICY, DocumentClassification.INTERNAL);
+    }
+
+    private List<RetrievedChunk> search(EmbeddingVector queryEmbedding, int topK, double similarityThreshold) {
+        return adapter.search(queryEmbedding, topK, similarityThreshold, RetrievalFilter.none());
+    }
+
     @Test
     void retrievesAnIndexedChunkThatIsIdenticalToTheQuery() {
         DocumentChunk chunk = chunk("Water damage coverage", ChunkMetadata.empty());
-        adapter.index(chunk, vector(1f, 0f, 0f), descriptor);
+        index(chunk, vector(1f, 0f, 0f));
 
-        List<RetrievedChunk> results = adapter.search(vector(1f, 0f, 0f), 8, 0.5);
+        List<RetrievedChunk> results = search(vector(1f, 0f, 0f), 8, 0.5);
 
         assertEquals(1, results.size());
         assertEquals(chunk.id(), results.get(0).chunkId());
@@ -88,10 +99,10 @@ class PgVectorStoreAdapterTest {
     void rejectsAnOrthogonalChunkBelowTheSimilarityThreshold() {
         DocumentChunk relevant = chunk("relevant", ChunkMetadata.empty());
         DocumentChunk irrelevant = chunk("irrelevant", ChunkMetadata.empty());
-        adapter.index(relevant, vector(1f, 0f, 0f), descriptor);
-        adapter.index(irrelevant, vector(0f, 1f, 0f), descriptor);
+        index(relevant, vector(1f, 0f, 0f));
+        index(irrelevant, vector(0f, 1f, 0f));
 
-        List<RetrievedChunk> results = adapter.search(vector(1f, 0f, 0f), 8, 0.75);
+        List<RetrievedChunk> results = search(vector(1f, 0f, 0f), 8, 0.75);
 
         assertEquals(1, results.size());
         assertEquals(relevant.id(), results.get(0).chunkId());
@@ -100,10 +111,10 @@ class PgVectorStoreAdapterTest {
     @Test
     void limitsResultsToTopK() {
         for (int i = 0; i < 5; i++) {
-            adapter.index(chunk("chunk " + i, ChunkMetadata.empty()), vector(1f, 0f, 0f), descriptor);
+            index(chunk("chunk " + i, ChunkMetadata.empty()), vector(1f, 0f, 0f));
         }
 
-        List<RetrievedChunk> results = adapter.search(vector(1f, 0f, 0f), 3, 0.5);
+        List<RetrievedChunk> results = search(vector(1f, 0f, 0f), 3, 0.5);
 
         assertEquals(3, results.size());
     }
@@ -112,9 +123,9 @@ class PgVectorStoreAdapterTest {
     void propagatesStructuralMetadata() {
         ChunkMetadata metadata = new ChunkMetadata(37, "Chapter 7", "7.2 Water Damage Coverage", 4);
         DocumentChunk chunk = chunk("content", metadata);
-        adapter.index(chunk, vector(1f, 0f, 0f), descriptor);
+        index(chunk, vector(1f, 0f, 0f));
 
-        RetrievedChunk result = adapter.search(vector(1f, 0f, 0f), 8, 0.5).get(0);
+        RetrievedChunk result = search(vector(1f, 0f, 0f), 8, 0.5).get(0);
 
         assertEquals(37, result.metadata().page());
         assertEquals("Chapter 7", result.metadata().chapter());
@@ -127,10 +138,10 @@ class PgVectorStoreAdapterTest {
     @Test
     void reindexingTheSameChunkIdUpsertsRatherThanDuplicates() {
         DocumentChunk chunk = chunk("original content", ChunkMetadata.empty());
-        adapter.index(chunk, vector(1f, 0f, 0f), descriptor);
-        adapter.index(chunk, vector(1f, 0f, 0f), descriptor);
+        index(chunk, vector(1f, 0f, 0f));
+        index(chunk, vector(1f, 0f, 0f));
 
-        List<RetrievedChunk> results = adapter.search(vector(1f, 0f, 0f), 8, 0.5);
+        List<RetrievedChunk> results = search(vector(1f, 0f, 0f), 8, 0.5);
 
         assertEquals(1, results.size(), "re-indexing the same chunk id must replace, not duplicate, its vector");
     }

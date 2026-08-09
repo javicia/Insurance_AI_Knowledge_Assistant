@@ -64,7 +64,9 @@ Neither `AskInsuranceKnowledgeUseCase` nor `EmbedDocumentVersionUseCase` imports
 ### The fake adapter
 
 `FakeEmbeddingModelAdapter` (`insurance-ai.ai.provider: fake`) is a deterministic
-feature-hashing bag-of-words vectorizer: each word in the input hashes into one of 64 buckets,
+feature-hashing bag-of-words vectorizer: each word in the input hashes into one of 1536 buckets
+(matching `vector_store.embedding`'s fixed `vector(1536)` column width - pgvector rejects any
+vector whose dimension does not match the column, regardless of which "model" produced it),
 bucket counts are L2-normalized. It is **not a real embedding model** - it exists solely so the
 FASE 5 pipeline can be exercised end to end (automated tests and manual validation) without
 OpenAI credentials (brief section 17/18). It produces vectors that are closer together for
