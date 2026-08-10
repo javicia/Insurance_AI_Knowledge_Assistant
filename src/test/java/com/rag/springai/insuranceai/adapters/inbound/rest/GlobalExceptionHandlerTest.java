@@ -4,6 +4,7 @@ import com.rag.springai.insuranceai.domain.shared.exception.InfrastructureExcept
 import com.rag.springai.insuranceai.application.shared.exception.ApplicationException;
 import com.rag.springai.insuranceai.domain.shared.TraceId;
 import com.rag.springai.insuranceai.domain.shared.exception.DomainException;
+import com.rag.springai.insuranceai.domain.shared.exception.PermanentProcessingException;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -39,6 +40,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/infrastructure-error")
         void infrastructureError() {
             throw new StubInfrastructureException();
+        }
+
+        @GetMapping("/permanent-processing-error")
+        void permanentProcessingError() {
+            throw new PermanentProcessingException("STUB_PERMANENT_ERROR", "stub permanent failure");
         }
 
         @GetMapping("/unexpected-error")
@@ -93,6 +99,15 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(503, response.getStatus());
         assertTrue(response.getContentAsString().contains("STUB_INFRASTRUCTURE_ERROR"));
+    }
+
+    @Test
+    void shouldMapPermanentProcessingExceptionTo502WithErrorCode() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(get("/permanent-processing-error")).andReturn()
+                .getResponse();
+
+        assertEquals(502, response.getStatus());
+        assertTrue(response.getContentAsString().contains("STUB_PERMANENT_ERROR"));
     }
 
     @Test

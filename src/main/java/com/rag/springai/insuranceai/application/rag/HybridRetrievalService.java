@@ -13,6 +13,8 @@ import com.rag.springai.insuranceai.ports.outbound.EmbeddingModelPort;
 import com.rag.springai.insuranceai.ports.outbound.LexicalSearchPort;
 import com.rag.springai.insuranceai.ports.outbound.RerankerPort;
 import com.rag.springai.insuranceai.ports.outbound.VectorSearchPort;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -53,10 +55,12 @@ public class HybridRetrievalService {
     private final QueryExpander queryExpander;
     private final ContextSelector contextSelector;
     private final InsuranceAiProperties properties;
+    private final MeterRegistry meterRegistry;
 
     public HybridRetrievalService(EmbeddingModelPort embeddingModelPort, VectorSearchPort vectorSearchPort,
             LexicalSearchPort lexicalSearchPort, RerankerPort rerankerPort, ScoreFusion scoreFusion,
-            QueryExpander queryExpander, ContextSelector contextSelector, InsuranceAiProperties properties) {
+            QueryExpander queryExpander, ContextSelector contextSelector, InsuranceAiProperties properties,
+            MeterRegistry meterRegistry) {
         this.embeddingModelPort = Objects.requireNonNull(embeddingModelPort, "embeddingModelPort must not be null");
         this.vectorSearchPort = Objects.requireNonNull(vectorSearchPort, "vectorSearchPort must not be null");
         this.lexicalSearchPort = Objects.requireNonNull(lexicalSearchPort, "lexicalSearchPort must not be null");
@@ -65,9 +69,30 @@ public class HybridRetrievalService {
         this.queryExpander = Objects.requireNonNull(queryExpander, "queryExpander must not be null");
         this.contextSelector = Objects.requireNonNull(contextSelector, "contextSelector must not be null");
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
+        this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry must not be null");
     }
 
+    /**
+     * Times the whole retrieval pipeline (query expansion through context selection) as {@code
+     * rag.retrieval.latency}, tagged by {@code outcome} (brief FASE 11 section 55's "latency
+     * (LLM/retrieval/embedding/Kafka)" requirement - see {@code docs/observability/OBSERVABILITY.md}).
+     * A single timer around the whole method, not one per stage: the per-stage candidate counts
+     * are already captured by {@link RetrievalDiagnostics}/AI Audit (FASE 9) - this metric answers
+     * "how long did retrieval take", not "which stage was slow", which would need per-stage
+     * instrumentation this PoC does not need yet.
+     */
     public HybridRetrievalOutcome retrieve(String question, RetrievalFilter filter) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            return doRetrieve(question, filter, sample);
+        }
+        catch (RuntimeException e) {
+            sample.stop(meterRegistry.timer("rag.retrieval.latency", "outcome", "ERROR"));
+            throw e;
+        }
+    }
+
+    private HybridRetrievalOutcome doRetrieve(String question, RetrievalFilter filter, Timer.Sample sample) {
         InsuranceAiProperties.Rag config = properties.rag();
 
         List<String> expandedTerms = queryExpander.expand(question, config.queryExpansion().enabled(),
@@ -116,6 +141,7 @@ public class HybridRetrievalService {
                 diagnostics.outcome(), diagnostics.semanticCandidateCount(), diagnostics.lexicalCandidateCount(),
                 diagnostics.fusedCandidateCount(), diagnostics.rerankedCandidateCount(),
                 diagnostics.finalCandidateCount());
+        sample.stop(meterRegistry.timer("rag.retrieval.latency", "outcome", outcome.name()));
 
         return new HybridRetrievalOutcome(finalCandidates, diagnostics);
     }

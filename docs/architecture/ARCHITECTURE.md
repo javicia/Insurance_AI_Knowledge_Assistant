@@ -52,9 +52,10 @@ mandatory for every subsequent phase (brief §37).
 |---|---|
 | **Document Management** | Documents, versions, chunks, metadata, ingestion lifecycle. |
 | **RAG** | Questions, hybrid retrieval, reranking, context assembly, grounding, citations. |
+| **GenAI Security** | Prompt injection detection and PII detection guardrails on the question, retrieved content and generated answer (FASE 8). |
 | **AI Governance** | AI System Registry, Model Registry, Prompt Registry, risk classification, human oversight metadata. |
 | **AI Audit** | Traceable record of every AI execution: model, prompt version, retrieval scores, tokens, latency, guardrail events. |
-| **AI Evaluation** | Evaluation datasets, expected answers/sources, metric runners, results. |
+| **AI Evaluation** | Evaluation datasets, expected answers/sources, metric runners, results, regression gate. |
 
 Each context owns its `domain` and `application` slice under a dedicated package; contexts
 communicate through application-layer ports and, where genuinely asynchronous (document
@@ -83,7 +84,8 @@ PDF upload → hash (SHA-256, idempotency) → insurance.document.uploaded
    → insurance.document.embedded → PostgreSQL + pgvector
 ```
 
-Detailed in `docs/rag/CHUNKING.md` and `docs/rag/EMBEDDINGS.md` (created in FASE 4).
+Detailed in `docs/rag/RAG_DESIGN.md` section 2 (chunking/ingestion) and `docs/rag/EMBEDDINGS.md`
+(created in FASE 4/5).
 
 ## 7. What this system intentionally does NOT do
 

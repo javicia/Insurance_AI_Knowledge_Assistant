@@ -1,7 +1,27 @@
 spring:
   application:
     name: insurance-knowledge-assistant
+  http:
+    clients:
+      # FASE 11: bounds every auto-configured RestClient/WebClient (including Spring AI's OpenAI/
+      # Anthropic HTTP clients) so a provider outage/hang cannot leave a POST /api/chat request
+      # blocked indefinitely - see docs/resilience/RESILIENCE.md.
+      connect-timeout: 5s
+      read-timeout: 30s
   ai:
+    retry:
+      # Spring AI auto-configures a RetryTemplate around every ChatModel#call (spring-ai-
+      # autoconfigure-retry) - its own defaults (10 attempts, backoff up to 3 minutes between
+      # attempts) are tuned for a batch/background caller, not a synchronous POST /api/chat
+      # request, where a caller should get a definitive answer or a 502/503 in a few seconds.
+      # on-client-errors is left at its default (false): a 4xx is not retry-safe and is
+      # classified as such by OpenAiLlmAdapter/AnthropicLlmAdapter - see
+      # docs/resilience/RESILIENCE.md.
+      max-attempts: 3
+      backoff:
+        initial-interval: 500ms
+        multiplier: 2
+        max-interval: 3s
     # Spring AI's OpenAI/Anthropic auto-configuration requires a non-empty credential to even
     # build its client beans, regardless of whether a model call is ever made - the placeholder
     # below only lets the application context boot cleanly without real API keys. Real keys are
@@ -92,8 +112,31 @@ insurance-ai:
   governance:
     audit:
       enabled: true
+  evaluation:
+    thresholds:
+      # PoC-level quality gate (brief FASE 10 section 10) - not scientifically calibrated,
+      # a starting point for the built-in dataset's 4 in-scope / 3 out-of-scope cases (see
+      # InsuranceEvaluationDataset). A production deployment would recalibrate these against a
+      # much larger labelled dataset before trusting them as a real regression gate.
+      min-grounding-rate: 1.0
+      min-no-answer-accuracy: 1.0
+      min-recall-at-k: 0.75
   ai:
     # openai | anthropic | fake. "fake" selects deterministic offline adapters for
     # environments without provider credentials (brief section 17/18) - never use in
     # production. Overridable so local validation runs don't require editing this file.
     provider: ${INSURANCE_AI_PROVIDER:openai}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # FASE 11: only health/info/metrics - never "*" (no env/beans/heapdump/shutdown exposed
+        # unauthenticated, matching this PoC's "no IAM introduced" stance - see
+        # docs/observability/OBSERVABILITY.md).
+        include: health,info,metrics
+  endpoint:
+    health:
+      # Never leak DB/Kafka connection details in an unauthenticated response (Boot's own
+      # default - kept explicit here so it is not accidentally loosened to "always").
+      show-details: never

@@ -41,6 +41,25 @@
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
         <dependency>
+            <!-- FASE 11 (Observability): health checks (DB/Kafka, auto-configured from the
+                 already-present DataSource/KafkaAdmin beans) and a metrics registry
+                 (MeterRegistry) for the custom RAG-stage latency timers - see
+                 docs/observability/OBSERVABILITY.md. Deliberately no Prometheus/Grafana/APM
+                 stack: this is a PoC, not production monitoring infrastructure. -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <!-- FASE 12 (API documentation): generates /v3/api-docs (OpenAPI 3 JSON) and a
+                 browsable /swagger-ui.html directly from the existing @RestController classes
+                 and their record-based DTOs - no separate documentation site/tooling. Version
+                 3.x is the first springdoc line built for Spring Boot 4/Spring Framework 7 (the
+                 2.x line targets Boot 3); see docs/adr/ADR-011-API-DOCUMENTATION.md. -->
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>3.1.0</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-pdf-document-reader</artifactId>
         </dependency>

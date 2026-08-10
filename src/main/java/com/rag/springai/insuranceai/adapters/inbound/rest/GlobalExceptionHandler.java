@@ -4,6 +4,7 @@ import com.rag.springai.insuranceai.application.shared.exception.ApplicationExce
 import com.rag.springai.insuranceai.domain.shared.TraceId;
 import com.rag.springai.insuranceai.domain.shared.exception.DomainException;
 import com.rag.springai.insuranceai.domain.shared.exception.InfrastructureException;
+import com.rag.springai.insuranceai.domain.shared.exception.PermanentProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -32,6 +33,12 @@ class GlobalExceptionHandler {
     ResponseEntity<ErrorResponse> handleApplicationException(ApplicationException exception) {
         log.warn("Use case could not be completed: {}", exception.errorCode());
         return respond(HttpStatus.UNPROCESSABLE_ENTITY, exception.errorCode(), exception.getMessage());
+    }
+
+    @ExceptionHandler(PermanentProcessingException.class)
+    ResponseEntity<ErrorResponse> handlePermanentProcessingException(PermanentProcessingException exception) {
+        log.error("Permanent infrastructure failure (not retry-safe): {}", exception.errorCode(), exception);
+        return respond(HttpStatus.BAD_GATEWAY, exception.errorCode(), exception.getMessage());
     }
 
     @ExceptionHandler(InfrastructureException.class)

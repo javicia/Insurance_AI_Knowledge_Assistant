@@ -9,6 +9,8 @@ import com.rag.springai.insuranceai.domain.document.DocumentId;
 import com.rag.springai.insuranceai.domain.document.DocumentMetadata;
 import com.rag.springai.insuranceai.domain.document.DocumentType;
 import com.rag.springai.insuranceai.ports.outbound.DocumentRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +34,8 @@ import java.time.Instant;
  */
 @RestController
 @RequestMapping("/api/documents")
+@Tag(name = "Document Management", description = "Upload insurance documentation (PDF) and check ingestion "
+        + "status. Ingestion (extraction, chunking, embedding) runs asynchronously via Kafka.")
 class DocumentController {
 
     private final RegisterDocumentUseCase registerDocumentUseCase;
@@ -43,6 +47,11 @@ class DocumentController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload a document",
+            description = "Registers a new document and its first version, then publishes "
+                    + "insurance.document.uploaded to trigger asynchronous ingestion. The returned resource's "
+                    + "version status starts UPLOADED, not yet EMBEDDED - poll GET /api/documents/{id} to "
+                    + "observe it progress to PROCESSED then EMBEDDED (or FAILED).")
     ResponseEntity<DocumentResponse> upload(@RequestParam("file") MultipartFile file,
             @RequestParam("name") String name, @RequestParam("type") DocumentType type,
             @RequestParam(value = "product", required = false) String product,
@@ -60,6 +69,7 @@ class DocumentController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Get a document and its versions' current status")
     ResponseEntity<DocumentResponse> get(@PathVariable String id) {
         Document document = documentRepository.findById(DocumentId.of(id))
                 .orElseThrow(() -> new DocumentNotFoundException(DocumentId.of(id)));

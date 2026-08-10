@@ -12,6 +12,10 @@ public record RagAnswer(String answer, List<SourceReference> sources, Grounding 
     private static final String NO_ANSWER_MESSAGE =
             "I do not have sufficient information in the available documentation to answer reliably.";
 
+    private static final String BLOCKED_MESSAGE =
+            "This question could not be processed because it appears to attempt to override system "
+                    + "instructions.";
+
     public RagAnswer {
         Objects.requireNonNull(answer, "answer must not be null");
         Objects.requireNonNull(sources, "sources must not be null");
@@ -26,5 +30,15 @@ public record RagAnswer(String answer, List<SourceReference> sources, Grounding 
      */
     public static RagAnswer noAnswer(String traceId) {
         return new RagAnswer(NO_ANSWER_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId);
+    }
+
+    /**
+     * Produced when {@code InputGuardService} detects a prompt injection attempt in the question
+     * itself (brief FASE 8 section 22) - retrieval and the LLM are never invoked, same as {@link
+     * #noAnswer}. Grounding is {@code NOT_GROUNDED}: no grounded answer was produced, blocking is
+     * simply a different reason for that than "no relevant evidence".
+     */
+    public static RagAnswer blocked(String traceId) {
+        return new RagAnswer(BLOCKED_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId);
     }
 }

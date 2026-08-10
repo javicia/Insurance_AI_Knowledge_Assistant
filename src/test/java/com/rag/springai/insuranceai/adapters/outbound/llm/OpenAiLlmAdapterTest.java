@@ -2,10 +2,13 @@ package com.rag.springai.insuranceai.adapters.outbound.llm;
 
 import com.rag.springai.insuranceai.domain.rag.LlmCompletion;
 import com.rag.springai.insuranceai.domain.rag.LlmPrompt;
+import com.rag.springai.insuranceai.domain.shared.exception.PermanentProcessingException;
 import com.rag.springai.insuranceai.domain.shared.exception.TransientProcessingException;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.List;
 
@@ -41,6 +44,19 @@ class OpenAiLlmAdapterTest {
         OpenAiLlmAdapter adapter = new OpenAiLlmAdapter(chatModel);
 
         assertThrows(TransientProcessingException.class,
+                () -> adapter.complete(new LlmPrompt("system", "question", List.of())));
+    }
+
+    @Test
+    void wrapsA4xxChatModelFailureAsAPermanentProcessingException() {
+        OpenAiChatModel chatModel = mock(OpenAiChatModel.class);
+        when(chatModel.call(any(Message.class), any(Message.class)))
+                .thenThrow(HttpClientErrorException.create(HttpStatus.UNAUTHORIZED, "Unauthorized", null, null,
+                        null));
+
+        OpenAiLlmAdapter adapter = new OpenAiLlmAdapter(chatModel);
+
+        assertThrows(PermanentProcessingException.class,
                 () -> adapter.complete(new LlmPrompt("system", "question", List.of())));
     }
 }

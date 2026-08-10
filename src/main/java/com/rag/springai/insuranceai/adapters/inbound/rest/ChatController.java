@@ -7,6 +7,9 @@ import com.rag.springai.insuranceai.domain.document.DocumentId;
 import com.rag.springai.insuranceai.domain.document.DocumentVersionId;
 import com.rag.springai.insuranceai.domain.rag.RetrievalFilter;
 import com.rag.springai.insuranceai.domain.shared.TraceId;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,6 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/chat")
+@Tag(name = "Chat", description = "Ask a question, grounded strictly in ingested insurance documentation. "
+        + "Never answers from the LLM's own knowledge, never makes a claim/pricing/eligibility decision.")
 class ChatController {
 
     private final AskInsuranceKnowledgeUseCase askInsuranceKnowledgeUseCase;
@@ -31,6 +36,19 @@ class ChatController {
     }
 
     @PostMapping
+    @Operation(summary = "Ask a question", description = "Runs the full guarded, hybrid-retrieval RAG pipeline. "
+            + "A 200 response can still carry a NOT_GROUNDED grounding status: either no relevant evidence was "
+            + "found (explicit no-answer, brief section 11) or the question was blocked by the prompt-injection "
+            + "guardrail (FASE 8) - the HTTP status alone does not distinguish these from a grounded answer, "
+            + "check the response body's grounding field.", responses = {
+                    @ApiResponse(responseCode = "200",
+                            description = "A grounded answer, an explicit no-answer, or a blocked-question "
+                                    + "response - see grounding.status in the body"),
+                    @ApiResponse(responseCode = "502", description = "The configured LLM provider rejected the "
+                            + "request (invalid credentials, malformed request) - not retry-safe"),
+                    @ApiResponse(responseCode = "503",
+                            description = "A transient infrastructure failure (LLM timeout, retrieval outage) - "
+                                    + "retrying later may succeed") })
     ResponseEntity<RagAnswer> ask(@RequestBody ChatRequest request) {
         AskInsuranceKnowledgeCommand command = new AskInsuranceKnowledgeCommand(request.question(),
                 toRetrievalFilter(request.filters()), currentTraceId());

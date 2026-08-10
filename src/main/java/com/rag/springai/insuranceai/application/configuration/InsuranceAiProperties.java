@@ -19,13 +19,14 @@ import java.util.Objects;
  * application} and {@code infrastructure -> application} are both allowed dependency directions.
  */
 @ConfigurationProperties(prefix = "insurance-ai")
-public record InsuranceAiProperties(Rag rag, Security security, Governance governance, Ai ai) {
+public record InsuranceAiProperties(Rag rag, Security security, Governance governance, Ai ai, Evaluation evaluation) {
 
     public InsuranceAiProperties {
         Objects.requireNonNull(rag, "insurance-ai.rag must be configured");
         Objects.requireNonNull(security, "insurance-ai.security must be configured");
         Objects.requireNonNull(governance, "insurance-ai.governance must be configured");
         Objects.requireNonNull(ai, "insurance-ai.ai must be configured");
+        Objects.requireNonNull(evaluation, "insurance-ai.evaluation must be configured");
     }
 
     /**
@@ -135,6 +136,22 @@ public record InsuranceAiProperties(Rag rag, Security security, Governance gover
     public record Ai(SupportedAiProvider provider) {
         public Ai {
             Objects.requireNonNull(provider, "insurance-ai.ai.provider must be configured");
+        }
+    }
+
+    /**
+     * FASE 10 (AI Evaluation) quality gate: the minimum each {@code EvaluationMetrics} ratio
+     * must reach for {@code EvaluationRunnerService} to mark a run {@code PASSED} rather than
+     * {@code FAILED} - the PoC's regression-detection mechanism (brief section 10's "thresholds,
+     * regression detection"): a run whose retrieval/grounding quality has regressed below these
+     * configured floors fails the gate immediately, without needing a second run to diff against.
+     */
+    public record Evaluation(Thresholds thresholds) {
+        public Evaluation {
+            Objects.requireNonNull(thresholds, "insurance-ai.evaluation.thresholds must be configured");
+        }
+
+        public record Thresholds(double minGroundingRate, double minNoAnswerAccuracy, double minRecallAtK) {
         }
     }
 
