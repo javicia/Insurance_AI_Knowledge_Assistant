@@ -1,0 +1,67 @@
+<div class="evaluation-page">
+  <header class="evaluation-page__header">
+    <div>
+      <h1>Evaluation</h1>
+      <p>Regression dataset results for retrieval and grounding quality.</p>
+    </div>
+    <button type="button" mat-flat-button [disabled]="running()" (click)="runBuiltInDataset()">
+      <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">play_arrow</mat-icon>
+      {{ running() ? 'Running…' : 'Run evaluation' }}
+    </button>
+  </header>
+
+  @if (!loading() && runs().length === 0) {
+    <app-empty-state
+      icon="insights"
+      title="No evaluation runs yet"
+      description="Run the built-in dataset to see retrieval and grounding metrics."
+    />
+  } @else {
+    <div class="evaluation-page__runs">
+      @for (run of runs(); track trackById($index, run)) {
+        <section class="evaluation-run">
+          <div class="evaluation-run__header">
+            <div>
+              <h2>{{ run.datasetName }}</h2>
+              <p class="evaluation-run__meta">{{ run.completedAt }} · {{ run.metrics.totalCases }} cases</p>
+            </div>
+            <app-status-badge [label]="run.status" [variant]="evaluationRunVariant(run.status)" />
+          </div>
+
+          <app-evaluation-metrics [metrics]="run.metrics" />
+
+          <table class="evaluation-run__table">
+            <thead>
+              <tr>
+                <th scope="col">Case</th>
+                <th scope="col">Category</th>
+                <th scope="col">Expected</th>
+                <th scope="col">Actual</th>
+                <th scope="col">Match</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (result of run.results; track result.caseId) {
+                <tr>
+                  <td>{{ result.caseId }}</td>
+                  <td>{{ result.category }}</td>
+                  <td>{{ result.expectedOutcome }}</td>
+                  <td>{{ result.actualOutcome }}</td>
+                  <td>
+                    <mat-icon
+                      fontSet="material-symbols-rounded"
+                      [class.evaluation-run__match--ok]="result.outcomeMatch"
+                      [attr.aria-label]="result.outcomeMatch ? 'Match' : 'No match'"
+                    >
+                      {{ result.outcomeMatch ? 'check_circle' : 'cancel' }}
+                    </mat-icon>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </section>
+      }
+    </div>
+  }
+</div>

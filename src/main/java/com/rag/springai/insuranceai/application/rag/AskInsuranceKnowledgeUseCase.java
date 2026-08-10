@@ -202,7 +202,7 @@ public final class AskInsuranceKnowledgeUseCase {
                 AuditOutcome.GROUNDED_ANSWER, null);
 
         return new RagAnswer(completion.text(), sources, new Grounding(GroundingStatus.GROUNDED), traceId,
-                piiInAnswer);
+                piiInAnswer, false);
     }
 
     private void recordAudit(String traceId, String provider, String promptKey, Integer promptVersion,

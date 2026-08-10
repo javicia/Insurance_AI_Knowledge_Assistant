@@ -1,0 +1,71 @@
+<form class="document-upload" [formGroup]="form" (ngSubmit)="submit()">
+  <div
+    class="document-upload__dropzone"
+    [class.document-upload__dropzone--dragging]="isDragging()"
+    [class.document-upload__dropzone--has-file]="selectedFile() !== null"
+    (dragover)="onDragOver($event)"
+    (dragleave)="onDragLeave()"
+    (drop)="onDrop($event)"
+  >
+    @if (selectedFile(); as file) {
+      <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">picture_as_pdf</mat-icon>
+      <p class="document-upload__filename">{{ file.name }}</p>
+      <button type="button" mat-button (click)="removeFile()">Remove</button>
+    } @else {
+      <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">upload_file</mat-icon>
+      <p>Drag &amp; drop a PDF here, or</p>
+      <label class="document-upload__browse">
+        Browse files
+        <input type="file" accept="application/pdf,.pdf" (change)="onFileSelected($event)" hidden />
+      </label>
+    }
+  </div>
+  @if (fileError(); as error) {
+    <p class="document-upload__error" role="alert">{{ error }}</p>
+  }
+
+  <div class="document-upload__fields">
+    <mat-form-field appearance="outline">
+      <mat-label>Document name</mat-label>
+      <input matInput formControlName="name" required />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Type</mat-label>
+      <mat-select formControlName="type">
+        @for (type of documentTypes; track type) {
+          <mat-option [value]="type">{{ type }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Classification</mat-label>
+      <mat-select formControlName="classification">
+        @for (classification of classifications; track classification) {
+          <mat-option [value]="classification">{{ classification }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Product (optional)</mat-label>
+      <input matInput formControlName="product" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Country (optional)</mat-label>
+      <input matInput formControlName="country" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Language (optional)</mat-label>
+      <input matInput formControlName="language" />
+    </mat-form-field>
+  </div>
+
+  <button type="submit" mat-flat-button [disabled]="!canSubmit() || form.invalid">
+    <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">cloud_upload</mat-icon>
+    {{ uploading() ? 'Uploading…' : 'Upload document' }}
+  </button>
+</form>

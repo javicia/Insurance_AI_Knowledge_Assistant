@@ -1,0 +1,18 @@
+<div class="app-shell">
+  <app-header (menuToggle)="toggleSidenav()" />
+
+  <mat-sidenav-container class="app-shell__body">
+    <mat-sidenav
+      class="app-shell__sidenav"
+      [mode]="isHandset() ? 'over' : 'side'"
+      [opened]="isHandset() ? sidenavOpened() : true"
+      [fixedInViewport]="isHandset()"
+    >
+      <app-sidebar (navigated)="closeOnMobileNavigate()" />
+    </mat-sidenav>
+
+    <mat-sidenav-content class="app-shell__content">
+      <router-outlet />
+    </mat-sidenav-content>
+  </mat-sidenav-container>
+</div>

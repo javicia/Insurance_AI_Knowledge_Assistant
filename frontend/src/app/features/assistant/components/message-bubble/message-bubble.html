@@ -1,0 +1,57 @@
+@if (message(); as msg) {
+  @if (msg.role === 'user') {
+    <div class="message-bubble message-bubble--user">
+      <div class="message-bubble__content">
+        <p class="message-bubble__text">{{ msg.text }}</p>
+      </div>
+    </div>
+  } @else {
+    <div class="message-bubble message-bubble--assistant">
+      <div class="message-bubble__avatar" aria-hidden="true">
+        <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">smart_toy</mat-icon>
+      </div>
+      <div class="message-bubble__content">
+        @switch (msg.kind) {
+          @case ('grounded') {
+            <p class="message-bubble__text">{{ msg.text }}</p>
+            @if (msg.piiDetected) {
+              <div class="message-bubble__pii-notice">
+                <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">privacy_tip</mat-icon>
+                <span>Sensitive information detected in this answer</span>
+              </div>
+            }
+            <app-citation-list [sources]="msg.sources" />
+          }
+          @case ('no-answer') {
+            <div class="message-bubble__state">
+              <mat-icon class="message-bubble__state-icon" fontSet="material-symbols-rounded" aria-hidden="true">search_off</mat-icon>
+              <div>
+                <p class="message-bubble__state-title">Insufficient evidence</p>
+                <p class="message-bubble__state-message">{{ msg.text }}</p>
+                <p class="message-bubble__state-hint">
+                  Try asking about a specific policy, procedure or document.
+                </p>
+              </div>
+            </div>
+          }
+          @case ('blocked') {
+            <app-security-banner />
+            @if (msg.traceId) {
+              <app-technical-details [traceId]="msg.traceId" />
+            }
+          }
+          @case ('error') {
+            <div class="message-bubble__state message-bubble__state--error">
+              <mat-icon class="message-bubble__state-icon" fontSet="material-symbols-rounded" aria-hidden="true">error</mat-icon>
+              <div>
+                <p class="message-bubble__state-title">Something went wrong</p>
+                <p class="message-bubble__state-message">{{ msg.text }}</p>
+              </div>
+            </div>
+            <app-technical-details [traceId]="msg.traceId" [code]="msg.errorCode ?? null" />
+          }
+        }
+      </div>
+    </div>
+  }
+}

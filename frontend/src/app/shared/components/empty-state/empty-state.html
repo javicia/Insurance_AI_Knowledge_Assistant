@@ -1,0 +1,8 @@
+<div class="empty-state">
+  <mat-icon class="empty-state__icon" fontSet="material-symbols-rounded" aria-hidden="true">{{ icon() }}</mat-icon>
+  <p class="empty-state__title">{{ title() }}</p>
+  @if (description(); as description) {
+    <p class="empty-state__description">{{ description }}</p>
+  }
+  <ng-content />
+</div>

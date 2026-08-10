@@ -1,0 +1,10 @@
+@if (sources().length > 0) {
+  <section class="citation-list" aria-label="Sources">
+    <h3 class="citation-list__heading">Sources</h3>
+    <div class="citation-list__items">
+      @for (source of sources(); track trackByChunkId($index, source)) {
+        <app-citation-card [source]="source" />
+      }
+    </div>
+  </section>
+}

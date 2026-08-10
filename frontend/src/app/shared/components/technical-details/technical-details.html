@@ -1,0 +1,16 @@
+<mat-expansion-panel class="technical-details" [hideToggle]="false">
+  <mat-expansion-panel-header>
+    <mat-panel-title>View technical details</mat-panel-title>
+  </mat-expansion-panel-header>
+
+  <dl class="technical-details__list">
+    @if (code()) {
+      <dt>Error code</dt>
+      <dd>{{ code() }}</dd>
+    }
+    @if (traceId()) {
+      <dt>Trace ID</dt>
+      <dd><code>{{ traceId() }}</code></dd>
+    }
+  </dl>
+</mat-expansion-panel>

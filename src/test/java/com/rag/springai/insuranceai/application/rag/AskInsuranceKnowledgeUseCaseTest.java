@@ -221,6 +221,7 @@ class AskInsuranceKnowledgeUseCaseTest {
         RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand("unrelated question", TraceId.generate()));
 
         assertEquals(GroundingStatus.NOT_GROUNDED, answer.grounding().status());
+        assertFalse(answer.blocked(), "no-answer must be distinguishable from blocked-by-guardrail");
         assertTrue(answer.sources().isEmpty());
         assertTrue(answer.answer().contains("do not have sufficient information"));
         verify(llmProvider, never()).complete(any());
@@ -256,6 +257,7 @@ class AskInsuranceKnowledgeUseCaseTest {
                 TraceId.generate()));
 
         assertEquals(GroundingStatus.NOT_GROUNDED, answer.grounding().status());
+        assertTrue(answer.blocked(), "the structured discriminator must distinguish this from a plain no-answer");
         assertTrue(answer.answer().contains("override system"));
         verify(hybridRetrievalService, never()).retrieve(any(), any());
         verify(llmProvider, never()).complete(any());

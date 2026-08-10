@@ -13,9 +13,18 @@ import java.util.Objects;
  * to this field, that detection result was only ever logged server-side, so the API caller had no
  * way to know a returned answer might contain PII copied from a source document. This is
  * transparency, not mitigation: the answer text itself is unchanged either way.
+ *
+ * <p><b>{@code blocked} (FASE 15 frontend integration):</b> before this field, both {@link
+ * #noAnswer} and {@link #blocked} produced an identical {@code grounding.status ==
+ * NOT_GROUNDED} with only the free-text {@code answer} message distinguishing "no relevant
+ * evidence" from "the question was blocked by the prompt-injection guardrail" - a caller (the
+ * Angular frontend, brief section 14) would have had to pattern-match against the exact message
+ * string to tell them apart, which is fragile and not a real API contract. {@code blocked} is a
+ * genuine structured discriminator, added because it is strictly necessary for the frontend to
+ * render two different UX states correctly, not a cosmetic addition.
  */
 public record RagAnswer(String answer, List<SourceReference> sources, Grounding grounding, String traceId,
-        boolean piiDetected) {
+        boolean piiDetected, boolean blocked) {
 
     private static final String NO_ANSWER_MESSAGE =
             "I do not have sufficient information in the available documentation to answer reliably.";
@@ -38,7 +47,7 @@ public record RagAnswer(String answer, List<SourceReference> sources, Grounding 
      */
     public static RagAnswer noAnswer(String traceId) {
         return new RagAnswer(NO_ANSWER_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId,
-                false);
+                false, false);
     }
 
     /**
@@ -49,6 +58,6 @@ public record RagAnswer(String answer, List<SourceReference> sources, Grounding 
      */
     public static RagAnswer blocked(String traceId) {
         return new RagAnswer(BLOCKED_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId,
-                false);
+                false, true);
     }
 }

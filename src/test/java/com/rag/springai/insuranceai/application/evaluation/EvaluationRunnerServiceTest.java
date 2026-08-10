@@ -42,7 +42,7 @@ class EvaluationRunnerServiceTest {
                 .thenReturn(new RagAnswer("Yes, covered.",
                         List.of(new SourceReference("doc-1", "Home Insurance Policy", "1.0", 1, "Water Damage",
                                 "chunk-1")),
-                        new Grounding(GroundingStatus.GROUNDED), "trace-1", false));
+                        new Grounding(GroundingStatus.GROUNDED), "trace-1", false, false));
         when(askInsuranceKnowledgeUseCase.ask(argThatQuestionEquals("What is the CEO's salary?")))
                 .thenReturn(RagAnswer.noAnswer("trace-2"));
 

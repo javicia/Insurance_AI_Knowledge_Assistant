@@ -1,0 +1,24 @@
+<div class="chat-composer">
+  <textarea
+    #textarea
+    class="chat-composer__input"
+    placeholder="Ask a question about internal insurance documentation…"
+    rows="1"
+    [value]="value()"
+    [disabled]="disabled()"
+    (input)="value.set($any($event.target).value)"
+    (keydown)="onKeydown($event)"
+    aria-label="Ask a question"
+  ></textarea>
+  <button
+    type="button"
+    mat-flat-button
+    class="chat-composer__send"
+    [disabled]="!canSend()"
+    matTooltip="Send (Enter) · New line (Shift+Enter)"
+    (click)="submit()"
+  >
+    <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">send</mat-icon>
+    Send
+  </button>
+</div>

@@ -1,0 +1,20 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+
+  &__body {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  &__sidenav {
+    width: 240px;
+    border-right: 1px solid var(--app-color-border);
+    background: var(--app-color-surface);
+  }
+
+  &__content {
+    background: var(--app-color-background);
+  }
+}

@@ -1,0 +1,69 @@
+<div class="audit-detail">
+  <header class="audit-detail__header">
+    <h2>Execution detail</h2>
+    <button type="button" mat-icon-button aria-label="Close" (click)="closed.emit()">
+      <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">close</mat-icon>
+    </button>
+  </header>
+
+  <section class="audit-detail__section">
+    <h3>Outcome</h3>
+    <app-status-badge [label]="record().outcome" [variant]="auditOutcomeVariant(record().outcome)" />
+    @if (record().errorClassification) {
+      <p class="audit-detail__note">Error classification: {{ record().errorClassification }}</p>
+    }
+    <p class="audit-detail__note">Latency: {{ record().latencyMs }} ms</p>
+  </section>
+
+  <section class="audit-detail__section">
+    <h3>Retrieval</h3>
+    <dl>
+      <dt>Retrieval outcome</dt>
+      <dd>{{ record().retrievalOutcome ?? '—' }}</dd>
+      <dt>Grounding status</dt>
+      <dd>{{ record().groundingStatus ?? '—' }}</dd>
+      <dt>Semantic candidates</dt>
+      <dd>{{ record().semanticCandidateCount }}</dd>
+      <dt>Lexical candidates</dt>
+      <dd>{{ record().lexicalCandidateCount }}</dd>
+      <dt>Final candidates</dt>
+      <dd>{{ record().finalCandidateCount }}</dd>
+    </dl>
+  </section>
+
+  <section class="audit-detail__section">
+    <h3>Security</h3>
+    <dl>
+      <dt>Prompt injection detected</dt>
+      <dd>{{ record().promptInjectionDetected ? 'Yes' : 'No' }}</dd>
+      <dt>PII detected in question</dt>
+      <dd>{{ record().piiDetectedInQuestion ? 'Yes' : 'No' }}</dd>
+      <dt>PII detected in answer</dt>
+      <dd>{{ record().piiDetectedInAnswer ? 'Yes' : 'No' }}</dd>
+    </dl>
+  </section>
+
+  <section class="audit-detail__section">
+    <h3>Governance</h3>
+    <dl>
+      <dt>Provider</dt>
+      <dd>{{ record().provider }}</dd>
+      <dt>Prompt key</dt>
+      <dd>{{ record().promptKey ?? '—' }}</dd>
+      <dt>Prompt version</dt>
+      <dd>{{ record().promptVersion ?? '—' }}</dd>
+      <dt>AI system ID</dt>
+      <dd><code>{{ record().aiSystemId }}</code></dd>
+    </dl>
+  </section>
+
+  <section class="audit-detail__section">
+    <h3>Trace</h3>
+    <dl>
+      <dt>Trace ID</dt>
+      <dd><code>{{ record().traceId }}</code></dd>
+      <dt>Timestamp</dt>
+      <dd>{{ record().timestamp }}</dd>
+    </dl>
+  </section>
+</div>

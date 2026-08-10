@@ -1,0 +1,29 @@
+<header class="header">
+  <button
+    type="button"
+    mat-icon-button
+    class="header__menu-toggle"
+    aria-label="Toggle navigation menu"
+    (click)="menuToggle.emit()"
+  >
+    <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">menu</mat-icon>
+  </button>
+
+  <div class="header__brand">
+    <span class="header__title">Insurance AI Assistant</span>
+    <span class="header__subtitle">Enterprise Knowledge Platform</span>
+  </div>
+
+  <div class="header__spacer"></div>
+
+  <div
+    class="header__status"
+    [class.header__status--up]="systemStatus.health() === 'UP'"
+    [class.header__status--down]="systemStatus.health() === 'DOWN'"
+    [matTooltip]="statusLabel()"
+    role="status"
+  >
+    <span class="header__status-dot" aria-hidden="true"></span>
+    <span class="header__status-label">{{ statusLabel() }}</span>
+  </div>
+</header>
