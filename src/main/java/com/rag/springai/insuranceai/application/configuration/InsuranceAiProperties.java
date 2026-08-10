@@ -1,4 +1,4 @@
-package com.rag.springai.insuranceai.infrastructure.configuration;
+package com.rag.springai.insuranceai.application.configuration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -6,9 +6,17 @@ import java.util.Objects;
 
 /**
  * Typed binding for the {@code insurance-ai.*} configuration namespace (brief section 48).
- * Only the configuration surface needed by FASE 1 (structure, not behaviour) is bound here;
- * fields are consumed by RAG, security and governance components as those are implemented in
- * later phases.
+ *
+ * <p>Lives in {@code application}, not {@code infrastructure} (moved here in FASE 6): {@code
+ * AskInsuranceKnowledgeUseCase}/{@code HybridRetrievalService} need this record's {@code rag}
+ * section directly, and {@code application} may not depend on {@code infrastructure}
+ * ({@code ArchitectureTest.applicationMustNotDependOnAdaptersOrInfrastructure}/{@code
+ * hexagonalLayersRespectDependencyDirection}). A plain {@code @ConfigurationProperties} record
+ * with no framework-specific behaviour is exactly the kind of type {@code application} is
+ * already allowed to hold ({@code @Service}/{@code @Value} usage predates this class) - moving
+ * it does not weaken any architecture rule, it corrects which layer actually owns this data.
+ * {@code adapters}/{@code infrastructure} remain free to depend on it, since {@code adapters ->
+ * application} and {@code infrastructure -> application} are both allowed dependency directions.
  */
 @ConfigurationProperties(prefix = "insurance-ai")
 public record InsuranceAiProperties(Rag rag, Security security, Governance governance, Ai ai) {

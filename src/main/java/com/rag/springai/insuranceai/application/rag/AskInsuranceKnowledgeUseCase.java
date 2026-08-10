@@ -8,7 +8,7 @@ import com.rag.springai.insuranceai.domain.document.DocumentVersion;
 import com.rag.springai.insuranceai.domain.rag.HybridRetrievalResult;
 import com.rag.springai.insuranceai.domain.rag.LlmCompletion;
 import com.rag.springai.insuranceai.domain.rag.LlmPrompt;
-import com.rag.springai.insuranceai.infrastructure.configuration.InsuranceAiProperties;
+import com.rag.springai.insuranceai.application.configuration.InsuranceAiProperties;
 import com.rag.springai.insuranceai.ports.outbound.DocumentRepository;
 import com.rag.springai.insuranceai.ports.outbound.LlmProvider;
 import org.springframework.stereotype.Service;

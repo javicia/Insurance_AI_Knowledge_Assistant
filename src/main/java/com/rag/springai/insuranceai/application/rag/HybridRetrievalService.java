@@ -8,7 +8,7 @@ import com.rag.springai.insuranceai.domain.rag.RetrievalFilter;
 import com.rag.springai.insuranceai.domain.rag.RetrievalOutcome;
 import com.rag.springai.insuranceai.domain.rag.RetrievedChunk;
 import com.rag.springai.insuranceai.domain.shared.exception.TransientProcessingException;
-import com.rag.springai.insuranceai.infrastructure.configuration.InsuranceAiProperties;
+import com.rag.springai.insuranceai.application.configuration.InsuranceAiProperties;
 import com.rag.springai.insuranceai.ports.outbound.EmbeddingModelPort;
 import com.rag.springai.insuranceai.ports.outbound.LexicalSearchPort;
 import com.rag.springai.insuranceai.ports.outbound.RerankerPort;

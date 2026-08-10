@@ -22,9 +22,11 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import java.io.ByteArrayOutputStream;
@@ -42,9 +44,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Kafka (brief section 10 acceptance test): upload -&gt; SHA-256 -&gt; Kafka
  * ({@code insurance.document.uploaded}) -&gt; PDF extraction -&gt; cleaning -&gt; chunking -&gt;
  * persistence, exercising the real {@code @Service}/{@code @Component} beans, not test doubles.
+ *
+ * <p>Deliberately asserts on chunk creation rather than on the transient {@code PROCESSED}
+ * status: this class shares its Spring context (and therefore its {@code
+ * DocumentProcessedEventListener}) with the rest of the suite (see {@code
+ * docs/testing/TESTCONTAINERS.md}), which also runs FASE 5's {@code EmbedDocumentVersionUseCase}
+ * against the {@code fake} embedding provider - fast enough that a version can already be {@code
+ * EMBEDDED} by the time an {@code Awaitility} poll observes it, racing past a {@code PROCESSED}
+ * check that used to only ever "work" because a missing real OpenAI key made embedding fail
+ * forever in earlier test runs. Chunk existence is FASE 4's actual, stable artifact and is not
+ * affected by that later, unrelated transition.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
+@ActiveProfiles("test")
+@ExtendWith(com.rag.springai.insuranceai.DatabaseCleanupExtension.class)
 class DocumentIngestionPipelineIntegrationTest {
 
     @Autowired
@@ -69,13 +83,15 @@ class DocumentIngestionPipelineIntegrationTest {
         Document registered = registerDocumentUseCase.register(command);
         DocumentVersionId versionId = registered.versions().get(0).id();
 
-        Awaitility.await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Document reloaded = documentRepository.findById(registered.id()).orElseThrow();
-            assertEquals(DocumentStatus.PROCESSED, reloaded.version(versionId).orElseThrow().status());
-        });
+        Awaitility.await().atMost(Duration.ofSeconds(30)).untilAsserted(
+                () -> assertFalse(documentChunkRepository.findByDocumentVersionId(versionId).isEmpty()));
+
+        Document reloaded = documentRepository.findById(registered.id()).orElseThrow();
+        DocumentStatus status = reloaded.version(versionId).orElseThrow().status();
+        assertTrue(status == DocumentStatus.PROCESSED || status == DocumentStatus.EMBEDDED,
+                "chunking must have succeeded, reaching at least PROCESSED - was " + status);
 
         List<DocumentChunk> chunks = documentChunkRepository.findByDocumentVersionId(versionId);
-        assertFalse(chunks.isEmpty());
         assertTrue(chunks.get(0).content().value().replaceAll("\\s+", " ").contains("Water damage"));
     }
 
@@ -89,10 +105,8 @@ class DocumentIngestionPipelineIntegrationTest {
 
         Document first = registerDocumentUseCase.register(command);
         DocumentVersionId versionId = first.versions().get(0).id();
-        Awaitility.await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Document reloaded = documentRepository.findById(first.id()).orElseThrow();
-            assertEquals(DocumentStatus.PROCESSED, reloaded.version(versionId).orElseThrow().status());
-        });
+        Awaitility.await().atMost(Duration.ofSeconds(30)).untilAsserted(
+                () -> assertFalse(documentChunkRepository.findByDocumentVersionId(versionId).isEmpty()));
         int chunkCountAfterFirstUpload = documentChunkRepository.findByDocumentVersionId(versionId).size();
 
         Document second = registerDocumentUseCase.register(command);
@@ -111,10 +125,8 @@ class DocumentIngestionPipelineIntegrationTest {
         Document registered = registerDocumentUseCase.register(command);
         DocumentVersionId versionId = registered.versions().get(0).id();
 
-        Awaitility.await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Document reloaded = documentRepository.findById(registered.id()).orElseThrow();
-            assertEquals(DocumentStatus.PROCESSED, reloaded.version(versionId).orElseThrow().status());
-        });
+        Awaitility.await().atMost(Duration.ofSeconds(30)).untilAsserted(
+                () -> assertFalse(documentChunkRepository.findByDocumentVersionId(versionId).isEmpty()));
         int chunkCountAfterFirstProcessing = documentChunkRepository.findByDocumentVersionId(versionId).size();
         ContentHash contentHash = registered.versions().get(0).contentHash();
 

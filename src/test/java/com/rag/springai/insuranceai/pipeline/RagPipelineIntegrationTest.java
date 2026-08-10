@@ -22,10 +22,11 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -37,24 +38,31 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * End-to-end Basic RAG test (brief section 21) against real Testcontainers-provided PostgreSQL
- * and Kafka, using {@code insurance-ai.ai.provider: fake} - deterministic, offline embedding
- * and LLM adapters (brief section 16/17/18: proves the pipeline mechanics, not a real OpenAI or
- * Anthropic call. See the FASE 5 report for a separate, honest statement of what manual
- * validation against real providers did or did not cover.
+ * End-to-end Advanced RAG test (brief FASE 6 section 21, evolving the FASE 5 Basic RAG test)
+ * against real Testcontainers-provided PostgreSQL and Kafka, using {@code
+ * insurance-ai.ai.provider: fake} (deterministic, offline embedding and LLM adapters, brief
+ * section 16/17/18: proves the pipeline mechanics, not a real OpenAI or Anthropic call) and a
+ * lowered {@code insurance-ai.rag.semantic.similarity-threshold} (both set by {@code
+ * application-test.yaml}, not a per-class override - see
+ * {@code docs/testing/TESTCONTAINERS.md} for why: every {@code @SpringBootTest} class in this
+ * suite shares the exact same {@code @ActiveProfiles("test")} configuration precisely so Spring
+ * reuses one cached {@code ApplicationContext}, and therefore one Postgres + one Kafka container
+ * pair, across the whole suite instead of starting a second pair just for this class).
+ *
+ * <p>The fake embedding model is a crude word-overlap heuristic (brief section 17/18), not a
+ * real semantic embedding: even a clearly on-topic passage/question pair only reaches ~0.60
+ * cosine similarity under it - production's {@code similarity-threshold: 0.75} (untouched, see
+ * {@code application.yaml}) would reject that pair on the semantic branch alone. FASE 6 adds a
+ * second, independent grounding path (a genuine PostgreSQL full-text match - see {@code
+ * AskInsuranceKnowledgeUseCase}'s no-answer policy), so the lowered test threshold is now a
+ * belt-and-braces measure rather than the sole reason these tests pass. See the FASE 5 report
+ * for a separate, honest statement of what manual validation against real providers did or did
+ * not cover.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
-@TestPropertySource(properties = { "insurance-ai.ai.provider=fake",
-        // The fake embedding model is a crude word-overlap heuristic (brief section 17/18), not a
-        // real semantic embedding: even a clearly on-topic passage/question pair only reaches
-        // ~0.60 cosine similarity under it. insurance-ai.rag.semantic.similarity-threshold=0.75
-        // is tuned for real embeddings (see RAG_DESIGN.md section 4) and would reject that pair
-        // here on the semantic branch alone - lowered only for this test, not production. FASE 6
-        // adds a second, independent grounding path (a genuine PostgreSQL full-text match, see
-        // AskInsuranceKnowledgeUseCase's no-answer policy), so this override is now a belt-and-
-        // braces measure rather than the sole reason these tests pass.
-        "insurance-ai.rag.semantic.similarity-threshold=0.5" })
+@ActiveProfiles("test")
+@ExtendWith(com.rag.springai.insuranceai.DatabaseCleanupExtension.class)
 class RagPipelineIntegrationTest {
 
     @Autowired

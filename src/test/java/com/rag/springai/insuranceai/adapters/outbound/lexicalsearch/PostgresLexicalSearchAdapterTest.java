@@ -15,12 +15,12 @@ import com.rag.springai.insuranceai.domain.rag.EmbeddingVector;
 import com.rag.springai.insuranceai.domain.rag.LexicalSearchResult;
 import com.rag.springai.insuranceai.domain.rag.RetrievalFilter;
 import com.rag.springai.insuranceai.domain.rag.SimilarityMetric;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,10 +35,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Rows are written via {@link PgVectorStoreAdapter#index} (the only write path into {@code
  * vector_store}, FASE 5) so {@code content_tsv} is populated exactly as it would be in
- * production - this test never inserts rows by hand.
+ * production - this test never inserts rows by hand. {@code vector_store} is truncated before
+ * every test by {@link com.rag.springai.insuranceai.DatabaseCleanupExtension}.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
+@ActiveProfiles("test")
+@ExtendWith(com.rag.springai.insuranceai.DatabaseCleanupExtension.class)
 class PostgresLexicalSearchAdapterTest {
 
     private static final int DIMENSIONS = 1536;
@@ -49,16 +52,8 @@ class PostgresLexicalSearchAdapterTest {
     @Autowired
     private PgVectorStoreAdapter vectorStoreAdapter;
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
-
     private final EmbeddingModelDescriptor descriptor = new EmbeddingModelDescriptor("openai",
             "text-embedding-3-small", null, DIMENSIONS, SimilarityMetric.COSINE);
-
-    @BeforeEach
-    void clearVectorStore() {
-        jdbcTemplate.update("DELETE FROM public.vector_store");
-    }
 
     private EmbeddingVector zeroVector() {
         List<Float> values = new ArrayList<>(DIMENSIONS);

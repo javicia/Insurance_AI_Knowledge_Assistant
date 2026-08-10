@@ -14,12 +14,12 @@ import com.rag.springai.insuranceai.domain.rag.EmbeddingVector;
 import com.rag.springai.insuranceai.domain.rag.RetrievalFilter;
 import com.rag.springai.insuranceai.domain.rag.RetrievedChunk;
 import com.rag.springai.insuranceai.domain.rag.SimilarityMetric;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,27 +33,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * relationships (orthogonal = maximally dissimilar, identical = maximally similar) rather than
  * a real embedding model, so similarity/threshold/top-K behaviour is exactly predictable.
  *
- * <p>{@code vector_store} is truncated before every test: the Spring context (and therefore
- * the underlying Testcontainers database) is shared and cached across test methods, and
- * several tests deliberately reuse the same vector so results would otherwise bleed between
- * tests.
+ * <p>{@code vector_store} is truncated before every test by {@link
+ * com.rag.springai.insuranceai.DatabaseCleanupExtension} (not a per-class {@code @BeforeEach} -
+ * see {@code docs/testing/TESTCONTAINERS.md}): the Spring context (and therefore the underlying
+ * Testcontainers database) is shared and cached across test methods and classes, and several
+ * tests deliberately reuse the same vector so results would otherwise bleed between tests.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
+@ActiveProfiles("test")
+@ExtendWith(com.rag.springai.insuranceai.DatabaseCleanupExtension.class)
 class PgVectorStoreAdapterTest {
 
     private static final int DIMENSIONS = 1536;
 
     @Autowired
     private PgVectorStoreAdapter adapter;
-
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
-
-    @BeforeEach
-    void clearVectorStore() {
-        jdbcTemplate.update("DELETE FROM public.vector_store");
-    }
 
     private final EmbeddingModelDescriptor descriptor = new EmbeddingModelDescriptor("openai",
             "text-embedding-3-small", null, DIMENSIONS, SimilarityMetric.COSINE);

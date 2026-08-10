@@ -1,21 +1,34 @@
-# RAG Design — Basic RAG (FASE 5)
+# RAG Design — Basic RAG (FASE 5) + Advanced RAG (FASE 6)
 
-Status: living document. Hybrid search, reranking, query expansion and the full Prompt
-Registry are FASE 6+ / FASE 9 - explicitly out of scope here.
+Status: living document. This document covers the parts of the pipeline that predate and remain
+unchanged since FASE 5 (embedding, vector store implementation, prompt/security boundary,
+citations). **Hybrid search, RRF fusion, reranking, query expansion and metadata filtering are
+FASE 6 - see `docs/rag/HYBRID_SEARCH.md`, `docs/rag/RERANKING.md` and
+`docs/adr/ADR-006-ADVANCED-RAG-RETRIEVAL-STRATEGY.md`.** The full Prompt Registry remains FASE 9,
+out of scope here.
 
 ## 1. Flow
+
+FASE 5's flow (below) is what `VectorSearchPort`/`EmbeddingModelPort` still implement; as of
+FASE 6, `AskInsuranceKnowledgeUseCase` no longer calls them directly - it delegates to
+`HybridRetrievalService`, which runs this semantic step *and* the lexical/fusion/reranking
+pipeline together. See `docs/rag/HYBRID_SEARCH.md` section 1 for the current, complete flow
+diagram; what follows here is still accurate for the semantic branch specifically.
 
 ```
 Question
    |
    v
-EmbeddingModelPort.embed(question)          -- AskInsuranceKnowledgeUseCase
+EmbeddingModelPort.embed(question)          -- HybridRetrievalService (FASE 5: AskInsuranceKnowledgeUseCase directly)
    |
    v
-VectorSearchPort.search(vector, topK, threshold)
+VectorSearchPort.search(vector, topK, threshold, filter)     -- filter param added FASE 6
    |
    v
-Empty? --yes--> RagAnswer.noAnswer()  (LLM is never called - brief section 11)
+(FASE 6: fused with LexicalSearchPort results, reranked, context-selected - see HYBRID_SEARCH.md)
+   |
+   v
+Empty final candidate list? --yes--> RagAnswer.noAnswer()  (LLM is never called - brief section 11)
    |no
    v
 Build SourceReference list (DocumentRepository, one lookup per unique documentId)
@@ -30,9 +43,11 @@ LlmProvider.complete(prompt)                -- OpenAiLlmAdapter / AnthropicLlmAd
 RagAnswer(answer, sources, grounding=GROUNDED, traceId)
 ```
 
-Entry point: `POST /api/chat` (`ChatController`) -> `AskInsuranceKnowledgeUseCase`. The use
-case's only dependencies are `EmbeddingModelPort`, `VectorSearchPort`, `LlmProvider` and
-`DocumentRepository` - no Spring AI type, no vendor SDK, no JDBC, no HTTP (brief section 6).
+Entry point: `POST /api/chat` (`ChatController`) -> `AskInsuranceKnowledgeUseCase` ->
+`HybridRetrievalService`. The use case's dependencies are `HybridRetrievalService`,
+`LlmProvider`, `DocumentRepository` and `InsuranceAiProperties` - no Spring AI type, no vendor
+SDK, no JDBC, no HTTP (brief section 6). `InsuranceAiProperties` lives in
+`application.configuration`, not `infrastructure` - see its Javadoc.
 
 ## 2. Ingestion side: how a chunk becomes searchable
 
@@ -102,8 +117,12 @@ PostgreSQL + pgvector (vector_store table, V3__vector_store.sql)
 
 - **Metric**: cosine distance (pgvector `<=>` operator, `vector_cosine_ops` HNSW index) -
   Spring AI's default, and the metric OpenAI's own embeddings are designed for.
-- **top-K**: `insurance-ai.rag.top-k` (default `8`).
-- **similarity-threshold**: `insurance-ai.rag.similarity-threshold` (default `0.75`).
+- **top-K**: `insurance-ai.rag.semantic.top-k` (default `8`).
+- **similarity-threshold**: `insurance-ai.rag.semantic.similarity-threshold` (default `0.75`).
+
+(FASE 6 nested these under `semantic.*` alongside the new `lexical.*`/`hybrid.*`/`reranking.*`/
+`query-expansion.*`/`context.*` sections - see `InsuranceAiProperties.Rag` and
+`docs/rag/HYBRID_SEARCH.md`. Values and meaning are otherwise unchanged from FASE 5.)
 
 Both are **initial PoC parameters, not scientifically tuned values** - brief section 12
 explicitly requires saying so plainly: they were chosen as reasonable starting points, not
@@ -116,24 +135,33 @@ bag-of-words hashing (`docs/rag/EMBEDDINGS.md`). The two are not interchangeable
 on-topic policy passage/question pair (e.g. "Water damage caused by a burst pipe is covered up
 to the policy limit of 5000 EUR." vs. "Is water damage from a burst pipe covered?") only reaches
 approximately cosine similarity `0.60` under the fake adapter, because word-overlap counting has
-nothing to do with the semantic distribution real embeddings produce. `RagPipelineIntegrationTest`
-therefore overrides `insurance-ai.rag.similarity-threshold` to `0.5` via its own
-`@TestPropertySource` - **scoped to that test only** - so it can exercise the pipeline mechanics
-(retrieval -> grounding -> LLM call) end to end with the offline fake provider. `application.yaml`'s
-production default stays at `0.75` and is never touched to accommodate the fake provider.
+nothing to do with the semantic distribution real embeddings produce. The test suite's shared
+`src/test/resources/application-test.yaml` (not a per-class override - see
+`docs/testing/TESTCONTAINERS.md` for why) lowers `insurance-ai.rag.semantic.similarity-threshold`
+to `0.5` for the whole test profile, so `RagPipelineIntegrationTest` can exercise the pipeline
+mechanics (retrieval -> grounding -> LLM call) end to end with the offline fake provider.
+`application.yaml`'s production default stays at `0.75` and is never touched to accommodate the
+fake provider. As of FASE 6, this override is a belt-and-braces measure rather than strictly
+necessary: a genuine PostgreSQL full-text match on the lexical branch alone is independently
+sufficient for grounding (see `docs/rag/HYBRID_SEARCH.md` section 7).
 
 ## 5. No-answer strategy
 
-If `VectorSearchPort.search` returns an empty list (no chunk cleared the similarity threshold),
-`AskInsuranceKnowledgeUseCase` returns `RagAnswer.noAnswer(...)` immediately and **never calls
-`LlmProvider`** - not a prompt instruction asking the model to decline, an actual code path
-that skips the call entirely (brief section 11). `temperature` is not used as a hallucination
-control anywhere in this codebase.
+FASE 5: if `VectorSearchPort.search` returned an empty list (no chunk cleared the similarity
+threshold), `AskInsuranceKnowledgeUseCase` returned `RagAnswer.noAnswer(...)` immediately and
+**never called `LlmProvider`**. FASE 6 generalizes this to two independent retrieval branches -
+see `docs/rag/HYBRID_SEARCH.md` section 7 for the exact policy - but the principle is identical:
+an actual code path skips the LLM call entirely when no branch found sufficient evidence (brief
+section 11), never a prompt instruction asking the model to decline. `temperature` is not used
+as a hallucination control anywhere in this codebase.
 
-`retrievalScore` (the `similarityScore` on `RetrievedChunk`, sourced directly from pgvector's
-distance calculation) and "answer confidence" are deliberately never conflated: this PoC
-exposes no invented "confidence" number for an LLM's answer (brief section 12) - grounding is
-represented only as the binary `GroundingStatus.GROUNDED`/`NOT_GROUNDED` shown in the response.
+`retrievalScore` (the `similarityScore` on `RetrievedChunk`/`semanticScore` on
+`HybridRetrievalResult`, sourced directly from pgvector's distance calculation) and "answer
+confidence" are deliberately never conflated: this PoC exposes no invented "confidence" number
+for an LLM's answer (brief section 12) - grounding is represented only as the binary
+`GroundingStatus.GROUNDED`/`NOT_GROUNDED` shown in the response. FASE 6's `fusionScore`/
+`rerankerScore` are treated the same way - never surfaced as a confidence number, never used as
+grounding evidence on their own (see `docs/rag/RERANKING.md` section 3).
 
 ## 6. Prompt and security boundary
 
@@ -163,12 +191,16 @@ propagated through `vector_store`) - nothing is inferred. `document`/`version` c
 
 ## 8. Current limitations
 
-- Single-query retrieval only: no hybrid (keyword) search, no query expansion, no reranking -
-  FASE 6.
+- ~~Single-query retrieval only: no hybrid (keyword) search, no query expansion, no reranking~~ -
+  implemented in FASE 6, see `docs/rag/HYBRID_SEARCH.md`/`docs/rag/RERANKING.md` for what was
+  built and their own "current limitations" sections for what remains PoC-level within them.
 - No AI Audit trail entries are written yet for chat requests (FASE 9) - `traceId` is present
   in every response and every log line (`TraceIdFilter`, FASE 1) so requests are already
-  correlatable, but nothing persists retrieval scores/token counts durably yet.
+  correlatable, and FASE 6 adds `RetrievalDiagnostics` (logged, not yet persisted) as a step
+  toward this, but nothing persists retrieval scores/token counts durably yet.
 - No PII/prompt-injection guardrail framework yet (FASE 8) - only the structural
   system/user separation described above.
 - Embeddings always use OpenAI regardless of the configured chat provider - see
   `docs/rag/EMBEDDINGS.md`.
+- No Maximal Marginal Relevance / full document-diversity optimization in context selection
+  (FASE 6 uses a simple per-section cap instead - see `docs/rag/HYBRID_SEARCH.md` section 6).

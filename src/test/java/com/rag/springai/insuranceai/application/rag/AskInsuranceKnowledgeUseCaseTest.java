@@ -18,7 +18,7 @@ import com.rag.springai.insuranceai.domain.rag.RetrievalDiagnostics;
 import com.rag.springai.insuranceai.domain.rag.RetrievalFilter;
 import com.rag.springai.insuranceai.domain.rag.RetrievalOutcome;
 import com.rag.springai.insuranceai.domain.shared.TraceId;
-import com.rag.springai.insuranceai.infrastructure.configuration.InsuranceAiProperties;
+import com.rag.springai.insuranceai.application.configuration.InsuranceAiProperties;
 import com.rag.springai.insuranceai.ports.outbound.DocumentRepository;
 import com.rag.springai.insuranceai.ports.outbound.LlmProvider;
 import org.junit.jupiter.api.Test;

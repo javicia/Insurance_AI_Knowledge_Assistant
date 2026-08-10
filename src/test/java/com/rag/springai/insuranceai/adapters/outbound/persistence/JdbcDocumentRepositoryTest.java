@@ -12,9 +12,11 @@ import com.rag.springai.insuranceai.domain.document.DocumentVersion;
 import com.rag.springai.insuranceai.domain.document.EffectivePeriod;
 import com.rag.springai.insuranceai.domain.document.VersionNumber;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -30,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
+@ActiveProfiles("test")
+@ExtendWith(com.rag.springai.insuranceai.DatabaseCleanupExtension.class)
 class JdbcDocumentRepositoryTest {
 
     @Autowired
