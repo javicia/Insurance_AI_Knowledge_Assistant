@@ -1,0 +1,86 @@
+name: insurance-knowledge-assistant
+
+networks:
+  insurance-ai-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  kafka-data:
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: insurance-ai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-insurance_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-insurance_ai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insurance_ai}
+    ports:
+      # Mapped to a non-default host port to avoid colliding with other local Postgres
+      # instances; the container's own network still uses the standard 5432.
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - insurance-ai-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-insurance_ai} -d ${POSTGRES_DB:-insurance_ai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: insurance-ai-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # INTERNAL is used by other containers on insurance-ai-net (e.g. kafka-ui); EXTERNAL is
+      # used by the Spring Boot application when it runs on the host via ./mvnw spring-boot:run.
+      KAFKA_LISTENERS: CONTROLLER://:9093,INTERNAL://:9092,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Document-ingestion topics (insurance.document.uploaded/processed/embedded) are not
+      # created by any code yet (FASE 4) - auto-creation only matters for this phase's
+      # connectivity checks, which use their own throwaway topic.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9094:9094"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - insurance-ai-net
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: insurance-ai-kafka-ui
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTERS_0_NAME: insurance-ai
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      # Mapped to a non-default host port to avoid colliding with other local Kafka UI
+      # instances also using 8080.
+      - "8081:8080"
+    networks:
+      - insurance-ai-net
+    depends_on:
+      kafka:
+        condition: service_healthy
