@@ -42,7 +42,7 @@ class EvaluationRunnerServiceTest {
                 .thenReturn(new RagAnswer("Yes, covered.",
                         List.of(new SourceReference("doc-1", "Home Insurance Policy", "1.0", 1, "Water Damage",
                                 "chunk-1")),
-                        new Grounding(GroundingStatus.GROUNDED), "trace-1"));
+                        new Grounding(GroundingStatus.GROUNDED), "trace-1", false));
         when(askInsuranceKnowledgeUseCase.ask(argThatQuestionEquals("What is the CEO's salary?")))
                 .thenReturn(RagAnswer.noAnswer("trace-2"));
 
@@ -82,7 +82,7 @@ class EvaluationRunnerServiceTest {
     private static InsuranceAiProperties properties(double minGroundingRate, double minNoAnswerAccuracy,
             double minRecallAtK) {
         InsuranceAiProperties.Rag rag = new InsuranceAiProperties.Rag(new InsuranceAiProperties.Rag.Semantic(8, 0.75),
-                new InsuranceAiProperties.Rag.Lexical(8), new InsuranceAiProperties.Rag.Hybrid(20, 8, 60.0),
+                new InsuranceAiProperties.Rag.Lexical(8, 0.0), new InsuranceAiProperties.Rag.Hybrid(20, 8, 60.0),
                 new InsuranceAiProperties.Rag.Reranking(true), new InsuranceAiProperties.Rag.QueryExpansion(false, 3),
                 new InsuranceAiProperties.Rag.Context(6000));
         return new InsuranceAiProperties(rag,

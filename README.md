@@ -130,15 +130,16 @@ ask → citation → audit trace demo end to end.
 - **Evaluation**: `docs/evaluation/AI_EVALUATION.md`
 - **Observability & Resilience**: `docs/observability/OBSERVABILITY.md`, `docs/resilience/RESILIENCE.md`
 - **Testing strategy**: `docs/testing/TESTCONTAINERS.md`
-- **Every architectural decision**: `docs/adr/ADR-001` through `ADR-011`
+- **Every architectural decision**: `docs/adr/ADR-001` through `ADR-012`
 
 ## Production Gap Analysis
 
 Explicitly out of scope for this PoC (not implemented, not simulated as implemented):
 
-IAM/authentication/authorization on any endpoint (including `/api/governance/**` and
-`/actuator/**`), API Gateway, rate limiting, WAF, SIEM integration, distributed tracing beyond the
-custom `traceId` MDC correlation, managed/HA PostgreSQL and Kafka, backup/disaster recovery, model
+IAM/authentication/authorization on any endpoint (including `/api/governance/**`, `/api/audit/**`,
+`/actuator/**`, `/swagger-ui.html` and `/v3/api-docs`), API Gateway, rate limiting, WAF, SIEM
+integration, distributed tracing beyond the custom `traceId` MDC correlation, managed/HA
+PostgreSQL and Kafka, backup/disaster recovery, model
 risk management, third-party model monitoring, formal legal/compliance/DPO review of the AI Act
 self-assessment (`docs/governance/AI_ACT.md`), independent security review or penetration testing,
 data retention policy, and a formal incident response process. Every fake/heuristic component

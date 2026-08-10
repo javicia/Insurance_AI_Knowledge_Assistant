@@ -39,15 +39,21 @@ import java.util.Objects;
  * ask the LLM, grounded strictly in that retrieved text (brief section 11: no relevant context
  * means no LLM call at all).
  *
- * <p><b>No-answer policy (FASE 6, brief section 21):</b> answer only if at least one final
- * candidate has {@code semanticScore >= insurance-ai.rag.semantic.similarity-threshold} (FASE
- * 5's original criterion, unchanged) <em>or</em> a non-null {@code lexicalScore} (PostgreSQL's
- * {@code @@} text-search operator only ever returns genuine matches - no extra numeric threshold
- * is invented for it, see {@code LexicalSearchPort}). This deliberately never derives a
- * probability from {@code fusionScore} or {@code rerankerScore} (brief section 21/23: rank
- * fusion and reranking are relevance signals, not grounding proof) - it inspects each
- * candidate's original semantic/lexical evidence, which reranking never overwrites (see {@link
- * HybridRetrievalResult#withRerankerScore}).
+ * <p><b>No-answer policy (FASE 6, brief section 21; FASE 14 audit remediation):</b> answer only
+ * if at least one final candidate has {@code semanticScore >= insurance-ai.rag.semantic
+ * .similarity-threshold} (FASE 5's original criterion, unchanged) <em>or</em> a non-null {@code
+ * lexicalScore} that also clears {@code insurance-ai.rag.lexical.min-rank}. The lexical branch
+ * originally treated any non-null {@code lexicalScore} as sufficient, on the reasoning that
+ * PostgreSQL's {@code @@} text-search operator "only ever returns genuine matches" - true, but
+ * "matched at all" and "matched well" are different things: {@code @@} is satisfied by a single
+ * weak keyword overlap just as readily as a strong multi-term match, and {@code ts_rank_cd} was
+ * being computed but never actually checked. {@code min-rank} closes that gap (default {@code
+ * 0.0}, i.e. no behaviour change until a deployment tunes it against its own corpus - see {@code
+ * InsuranceAiProperties.Rag.Lexical}'s Javadoc and {@code docs/adr/ADR-012-AUDIT-REMEDIATION.md}).
+ * This deliberately never derives a probability from {@code fusionScore} or {@code rerankerScore}
+ * (brief section 21/23: rank fusion and reranking are relevance signals, not grounding proof) -
+ * it inspects each candidate's original semantic/lexical evidence, which reranking never
+ * overwrites (see {@link HybridRetrievalResult#withRerankerScore}).
  *
  * <p><b>Guardrails (FASE 8, brief section 15):</b> {@link InputGuardService} scans the question
  * first - a detected prompt injection attempt blocks the request immediately ({@link
@@ -150,12 +156,22 @@ public final class AskInsuranceKnowledgeUseCase {
 
         warnIfRetrievedContentContainsInjectionAttempts(finalCandidates);
 
-        Prompt activePrompt = promptRepository.findActiveByKey(WellKnownAiSystems.INSURANCE_RAG_SYSTEM_PROMPT_KEY)
-                .orElseThrow(() -> new IllegalStateException(
-                        "No ACTIVE prompt found for key '" + WellKnownAiSystems.INSURANCE_RAG_SYSTEM_PROMPT_KEY
-                                + "' - the Prompt Registry must always have exactly one active prompt per key"));
-
-        List<SourceReference> sources = buildSources(finalCandidates);
+        Prompt activePrompt;
+        List<SourceReference> sources;
+        try {
+            activePrompt = promptRepository.findActiveByKey(WellKnownAiSystems.INSURANCE_RAG_SYSTEM_PROMPT_KEY)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "No ACTIVE prompt found for key '" + WellKnownAiSystems.INSURANCE_RAG_SYSTEM_PROMPT_KEY
+                                    + "' - the Prompt Registry must always have exactly one active prompt per key"));
+            sources = buildSources(finalCandidates);
+        }
+        catch (RuntimeException e) {
+            recordAudit(traceId, provider, null, null, outcome.diagnostics().outcome(),
+                    outcome.diagnostics().semanticCandidateCount(), outcome.diagnostics().lexicalCandidateCount(),
+                    outcome.diagnostics().finalCandidateCount(), null, false, inputAssessment.pii().detected(), false,
+                    startNanos, AuditOutcome.ERROR, e.getClass().getSimpleName());
+            throw e;
+        }
         LlmPrompt prompt = new LlmPrompt(activePrompt.content(), command.question(),
                 finalCandidates.stream().map(HybridRetrievalResult::content).toList());
         LlmCompletion completion;
@@ -185,7 +201,8 @@ public final class AskInsuranceKnowledgeUseCase {
                 GroundingStatus.GROUNDED.name(), false, inputAssessment.pii().detected(), piiInAnswer, startNanos,
                 AuditOutcome.GROUNDED_ANSWER, null);
 
-        return new RagAnswer(completion.text(), sources, new Grounding(GroundingStatus.GROUNDED), traceId);
+        return new RagAnswer(completion.text(), sources, new Grounding(GroundingStatus.GROUNDED), traceId,
+                piiInAnswer);
     }
 
     private void recordAudit(String traceId, String provider, String promptKey, Integer promptVersion,
@@ -214,9 +231,11 @@ public final class AskInsuranceKnowledgeUseCase {
 
     private boolean hasQualifyingCandidate(List<HybridRetrievalResult> candidates) {
         double semanticThreshold = properties.rag().semantic().similarityThreshold();
+        double minLexicalRank = properties.rag().lexical().minRank();
         return candidates.stream()
                 .anyMatch(candidate -> (candidate.semanticScore() != null
-                        && candidate.semanticScore() >= semanticThreshold) || candidate.lexicalScore() != null);
+                        && candidate.semanticScore() >= semanticThreshold)
+                        || (candidate.lexicalScore() != null && candidate.lexicalScore() >= minLexicalRank));
     }
 
     private List<SourceReference> buildSources(List<HybridRetrievalResult> candidates) {

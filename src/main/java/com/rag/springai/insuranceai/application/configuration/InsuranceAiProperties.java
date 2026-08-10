@@ -63,11 +63,26 @@ public record InsuranceAiProperties(Rag rag, Security security, Governance gover
             }
         }
 
-        /** PostgreSQL full-text search (BM25-style lexical retrieval). */
-        public record Lexical(int topK) {
+        /**
+         * PostgreSQL full-text search (BM25-style lexical retrieval). {@code minRank} is the
+         * minimum {@code ts_rank_cd} a candidate must reach to count as lexical grounding
+         * evidence in {@code AskInsuranceKnowledgeUseCase#hasQualifyingCandidate} (FASE 14 audit
+         * remediation, see {@code docs/adr/ADR-012-AUDIT-REMEDIATION.md}) - {@code
+         * PostgresLexicalSearchAdapter}'s {@code @@} match operator alone only proves "at least
+         * one query term matched somewhere", not "this is a meaningfully relevant match".
+         * Defaults to {@code 0.0} (every {@code @@} match still qualifies, i.e. the exact FASE
+         * 6-13 behaviour) so introducing this field is not itself a behaviour change - a
+         * production deployment should raise it once real {@code ts_rank_cd} distributions from
+         * its own corpus have been observed, since the scale of that score depends on term
+         * frequency and document length and cannot be usefully guessed in the abstract.
+         */
+        public record Lexical(int topK, double minRank) {
             public Lexical {
                 if (topK <= 0) {
                     throw new IllegalArgumentException("insurance-ai.rag.lexical.top-k must be positive");
+                }
+                if (minRank < 0.0) {
+                    throw new IllegalArgumentException("insurance-ai.rag.lexical.min-rank must not be negative");
                 }
             }
         }

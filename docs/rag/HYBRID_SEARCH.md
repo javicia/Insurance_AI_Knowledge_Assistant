@@ -82,10 +82,13 @@ setweight(to_tsvector('english', coalesce(metadata ->> 'section', '')), 'B')
   `tsquery` operator escaping.
 - **Index**: a single GIN index on `content_tsv` (`vector_store_content_tsv_gin_index`) -
   appropriate at this PoC's data scale; no partitioning/multi-index strategy considered.
-- **No separate relevance threshold**: PostgreSQL's `@@` match operator is itself the gate - a
-  row is either returned (genuinely matched the query) or it is not. See
-  `AskInsuranceKnowledgeUseCase`'s no-answer policy for why this matters (a non-null
-  `lexicalScore` is itself sufficient grounding evidence, unlike `fusionScore`/`rerankerScore`).
+- **Relevance floor (FASE 14 audit remediation)**: PostgreSQL's `@@` match operator is the first
+  gate - a row is either returned (genuinely matched the query) or it is not - but "matched at
+  all" and "matched well" are different things: `@@` is satisfied by a single weak keyword overlap
+  just as readily as a strong multi-term match. `insurance-ai.rag.lexical.min-rank` (default
+  `0.0`, i.e. no behaviour change from the original FASE 6 design until tuned) adds a second gate
+  on the actual `ts_rank_cd` value. See `AskInsuranceKnowledgeUseCase`'s no-answer policy and
+  `docs/adr/ADR-012-AUDIT-REMEDIATION.md`.
 
 Verified empirically during this project (not assumed): `to_tsvector('english', 'covers')` and
 `to_tsquery('english', 'covered')` both yield the `cover` lexeme (shared verb stem); a
@@ -136,10 +139,12 @@ to make this possible.
 
 See `AskInsuranceKnowledgeUseCase`'s Javadoc for the authoritative statement. Summary: a final
 candidate qualifies as grounding evidence if `semanticScore >= insurance-ai.rag.semantic.
-similarity-threshold` (FASE 5's original criterion) **or** it has a non-null `lexicalScore`
-(PostgreSQL's own match predicate is the bar - no additional invented threshold). Neither
-`fusionScore` nor `rerankerScore` is ever used as grounding evidence - see ADR-006 decision 4 for
-why the reranker specifically must never be mistaken for proof of grounding.
+similarity-threshold` (FASE 5's original criterion) **or** it has a non-null `lexicalScore` that
+also clears `insurance-ai.rag.lexical.min-rank` (FASE 14 audit remediation - defaults to `0.0`,
+reproducing the original FASE 6 "PostgreSQL's own match predicate is the bar" behaviour exactly;
+see `docs/adr/ADR-012-AUDIT-REMEDIATION.md`). Neither `fusionScore` nor `rerankerScore` is ever
+used as grounding evidence - see ADR-006 decision 4 for why the reranker specifically must never be
+mistaken for proof of grounding.
 
 ## 8. Partial failure / graceful degradation
 

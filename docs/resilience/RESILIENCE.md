@@ -54,12 +54,19 @@ section 61: reuse what the framework already provides before reaching for a new 
 ## 4. Failure classification at the LLM adapter boundary
 
 `OpenAiLlmAdapter`/`AnthropicLlmAdapter` now distinguish, using the standard Spring Web exception
-hierarchy (`org.springframework.web.client.HttpClientErrorException`, no new dependency):
+hierarchy (`org.springframework.web.client.HttpClientErrorException`, no new dependency) plus a
+shared `LlmFailureClassifier` (`adapters.shared.llm`, added FASE 14 - see
+`docs/adr/ADR-012-AUDIT-REMEDIATION.md`):
 
-- **`HttpClientErrorException`** (4xx - invalid API key, malformed request, rate limit exhausted)
-  → `PermanentProcessingException` (`..._CHAT_COMPLETION_REJECTED`). Already excluded from Spring
-  AI's own retry by `on-client-errors: false`, and correctly not retry-safe: nothing about waiting
-  and trying again fixes an invalid key.
+- **`429 Too Many Requests` / `408 Request Timeout`** → `TransientProcessingException`
+  (`..._CHAT_COMPLETION_RATE_LIMITED`). Conventionally transient: a caller-level retry with backoff
+  can plausibly still succeed. The original FASE 11 version of this classification treated every
+  4xx identically as permanent, which was too coarse - these two codes specifically do not mean
+  "this request is fundamentally wrong", only "not right now."
+- **Every other `HttpClientErrorException`** (400/401/403/404/422 - invalid API key, malformed
+  request) → `PermanentProcessingException` (`..._CHAT_COMPLETION_REJECTED`). Already excluded from
+  Spring AI's own retry by `on-client-errors: false`, and correctly not retry-safe: nothing about
+  waiting and trying again fixes an invalid key.
 - **Everything else** (5xx, timeout, connection drop, or any other `RuntimeException`) →
   `TransientProcessingException` (`..._CHAT_COMPLETION_FAILED`), unchanged from before FASE 11.
 
@@ -80,8 +87,9 @@ latency and duplicate audit records for the same logical request, not additional
 
 ## 6. Tests
 
-`OpenAiLlmAdapterTest`/`AnthropicLlmAdapterTest`: a 4xx (`HttpClientErrorException`) throws
-`PermanentProcessingException`; any other `RuntimeException` still throws
+`OpenAiLlmAdapterTest`/`AnthropicLlmAdapterTest`: a non-429/408 4xx (`HttpClientErrorException`)
+throws `PermanentProcessingException`; 429 and 408 specifically throw
+`TransientProcessingException` (FASE 14); any other `RuntimeException` still throws
 `TransientProcessingException` (regression-checked, unchanged behaviour).
 `GlobalExceptionHandlerTest`: `PermanentProcessingException` maps to `502` with its error code
 intact.

@@ -2,6 +2,7 @@ package com.rag.springai.insuranceai.domain.rag;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class EmbeddingModelDescriptorTest {
@@ -22,6 +23,9 @@ class EmbeddingModelDescriptorTest {
 
     @Test
     void allowsANullModelVersionSinceNotAllProvidersExposeOne() {
-        new EmbeddingModelDescriptor("openai", "text-embedding-3-small", null, 1536, SimilarityMetric.COSINE);
+        EmbeddingModelDescriptor descriptor = new EmbeddingModelDescriptor("openai", "text-embedding-3-small", null,
+                1536, SimilarityMetric.COSINE);
+
+        assertNull(descriptor.modelVersion());
     }
 }

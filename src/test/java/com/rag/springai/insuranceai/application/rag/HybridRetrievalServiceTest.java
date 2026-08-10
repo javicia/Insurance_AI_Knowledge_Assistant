@@ -52,7 +52,7 @@ class HybridRetrievalServiceTest {
 
     private HybridRetrievalService serviceWith(boolean rerankingEnabled, boolean queryExpansionEnabled) {
         InsuranceAiProperties.Rag rag = new InsuranceAiProperties.Rag(
-                new InsuranceAiProperties.Rag.Semantic(8, 0.75), new InsuranceAiProperties.Rag.Lexical(8),
+                new InsuranceAiProperties.Rag.Semantic(8, 0.75), new InsuranceAiProperties.Rag.Lexical(8, 0.0),
                 new InsuranceAiProperties.Rag.Hybrid(20, 8, 60.0),
                 new InsuranceAiProperties.Rag.Reranking(rerankingEnabled),
                 new InsuranceAiProperties.Rag.QueryExpansion(queryExpansionEnabled, 3),

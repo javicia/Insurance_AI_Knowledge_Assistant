@@ -39,6 +39,10 @@ class ArchitectureTest {
     @Test
     @DisplayName("domain must not depend on Spring, persistence, messaging or serialization frameworks")
     void domainMustBeFrameworkFree() {
+        // FASE 14 audit remediation (ADR-012, finding ARCH-01): the original blocklist predates
+        // observability (FASE 11, io.micrometer) and raw JDBC (java.sql) as concerns this project
+        // actually has - both are now explicit, not just implied by the domain layer never
+        // having imported them so far.
         noClasses().that().resideInAPackage(BASE_PACKAGE + ".domain..")
                 .should().dependOnClassesThat().resideInAnyPackage(
                         "org.springframework..",
@@ -46,7 +50,9 @@ class ArchitectureTest {
                         "org.hibernate..",
                         "org.apache.kafka..",
                         "com.fasterxml.jackson..",
-                        "jakarta.servlet..")
+                        "jakarta.servlet..",
+                        "io.micrometer..",
+                        "java.sql..")
                 .because("the domain layer must be pure Java (ADR-001)")
                 .check(importedClasses);
     }

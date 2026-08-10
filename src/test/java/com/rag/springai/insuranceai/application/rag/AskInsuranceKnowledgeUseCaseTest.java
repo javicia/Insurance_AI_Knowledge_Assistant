@@ -1,6 +1,8 @@
 package com.rag.springai.insuranceai.application.rag;
 
+import com.rag.springai.insuranceai.application.document.exception.DocumentNotFoundException;
 import com.rag.springai.insuranceai.domain.aisystem.AiSystemId;
+import com.rag.springai.insuranceai.domain.audit.AuditOutcome;
 import com.rag.springai.insuranceai.domain.document.ChunkContent;
 import com.rag.springai.insuranceai.domain.document.ChunkIndex;
 import com.rag.springai.insuranceai.domain.document.ChunkMetadata;
@@ -39,8 +41,14 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -83,8 +91,13 @@ class AskInsuranceKnowledgeUseCaseTest {
     }
 
     private static InsuranceAiProperties properties(double semanticThreshold) {
+        return properties(semanticThreshold, 0.0);
+    }
+
+    private static InsuranceAiProperties properties(double semanticThreshold, double minLexicalRank) {
         InsuranceAiProperties.Rag rag = new InsuranceAiProperties.Rag(
-                new InsuranceAiProperties.Rag.Semantic(8, semanticThreshold), new InsuranceAiProperties.Rag.Lexical(8),
+                new InsuranceAiProperties.Rag.Semantic(8, semanticThreshold),
+                new InsuranceAiProperties.Rag.Lexical(8, minLexicalRank),
                 new InsuranceAiProperties.Rag.Hybrid(20, 8, 60.0), new InsuranceAiProperties.Rag.Reranking(true),
                 new InsuranceAiProperties.Rag.QueryExpansion(false, 3), new InsuranceAiProperties.Rag.Context(6000));
         return new InsuranceAiProperties(rag,
@@ -115,6 +128,11 @@ class AskInsuranceKnowledgeUseCaseTest {
         Integer lexicalRank = lexicalScore != null ? 1 : null;
         return new HybridRetrievalResult(chunk.id(), chunk.documentId(), chunk.documentVersionId(), content,
                 chunk.metadata(), semanticScore, semanticRank, lexicalScore, lexicalRank, 0.5, null);
+    }
+
+    private AskInsuranceKnowledgeUseCase useCaseWithProperties(InsuranceAiProperties props) {
+        return new AskInsuranceKnowledgeUseCase(hybridRetrievalService, llmProvider, documentRepository, props,
+                inputGuardService, promptRepository, auditService, meterRegistry);
     }
 
     private HybridRetrievalOutcome outcomeOf(RetrievalOutcome retrievalOutcome, HybridRetrievalResult... candidates) {
@@ -253,5 +271,99 @@ class AskInsuranceKnowledgeUseCaseTest {
 
         assertEquals(GroundingStatus.NOT_GROUNDED, answer.grounding().status());
         verify(hybridRetrievalService).retrieve(any(), any());
+    }
+
+    // --- FASE 14 audit remediation regression tests ---
+
+    @Test
+    void aLexicalMatchBelowTheConfiguredMinimumRankDoesNotGround() {
+        AskInsuranceKnowledgeUseCase useCaseWithMinRank = useCaseWithProperties(properties(SEMANTIC_THRESHOLD, 0.5));
+        Document document = homePremiumPolicy();
+        HybridRetrievalResult candidate = candidateOf(document, "Weak keyword overlap only.", 1, null, null, 0.3);
+
+        when(hybridRetrievalService.retrieve(any(), any()))
+                .thenReturn(outcomeOf(RetrievalOutcome.LEXICAL_ONLY, candidate));
+
+        RagAnswer answer = useCaseWithMinRank
+                .ask(new AskInsuranceKnowledgeCommand("unrelated question", TraceId.generate()));
+
+        assertEquals(GroundingStatus.NOT_GROUNDED, answer.grounding().status());
+        verify(llmProvider, never()).complete(any());
+    }
+
+    @Test
+    void aLexicalMatchAtOrAboveTheConfiguredMinimumRankStillGrounds() {
+        AskInsuranceKnowledgeUseCase useCaseWithMinRank = useCaseWithProperties(properties(SEMANTIC_THRESHOLD, 0.5));
+        Document document = homePremiumPolicy();
+        HybridRetrievalResult candidate = candidateOf(document, "Strong multi-term match.", 1, null, null, 0.6);
+
+        when(hybridRetrievalService.retrieve(any(), any()))
+                .thenReturn(outcomeOf(RetrievalOutcome.LEXICAL_ONLY, candidate));
+        when(documentRepository.findById(document.id())).thenReturn(Optional.of(document));
+        when(llmProvider.complete(any())).thenReturn(new LlmCompletion("answer"));
+
+        RagAnswer answer = useCaseWithMinRank.ask(new AskInsuranceKnowledgeCommand("question", TraceId.generate()));
+
+        assertEquals(GroundingStatus.GROUNDED, answer.grounding().status());
+    }
+
+    @Test
+    void aMissingActivePromptIsAuditedAsAnErrorBeforePropagating() {
+        Document document = homePremiumPolicy();
+        HybridRetrievalResult candidate = candidateOf(document, "content", 1, null, 0.9, null);
+        when(hybridRetrievalService.retrieve(any(), any())).thenReturn(outcomeOf(RetrievalOutcome.HYBRID, candidate));
+        when(promptRepository.findActiveByKey(any())).thenReturn(Optional.empty());
+
+        assertThrows(IllegalStateException.class,
+                () -> useCase.ask(new AskInsuranceKnowledgeCommand("question", TraceId.generate())));
+
+        verify(auditService).record(any(), any(), any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any(),
+                anyBoolean(), anyBoolean(), anyBoolean(), anyLong(), eq(AuditOutcome.ERROR), any());
+        verify(llmProvider, never()).complete(any());
+    }
+
+    @Test
+    void aMissingDocumentDuringCitationBuildingIsAuditedAsAnErrorBeforePropagating() {
+        Document document = homePremiumPolicy();
+        HybridRetrievalResult candidate = candidateOf(document, "content", 1, null, 0.9, null);
+        when(hybridRetrievalService.retrieve(any(), any())).thenReturn(outcomeOf(RetrievalOutcome.HYBRID, candidate));
+        when(documentRepository.findById(document.id())).thenReturn(Optional.empty());
+
+        assertThrows(DocumentNotFoundException.class,
+                () -> useCase.ask(new AskInsuranceKnowledgeCommand("question", TraceId.generate())));
+
+        verify(auditService).record(any(), any(), any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any(),
+                anyBoolean(), anyBoolean(), anyBoolean(), anyLong(), eq(AuditOutcome.ERROR), any());
+        verify(llmProvider, never()).complete(any());
+    }
+
+    @Test
+    void aGroundedAnswerContainingDetectedPiiSurfacesThePiiDetectedFlag() {
+        Document document = homePremiumPolicy();
+        HybridRetrievalResult candidate = candidateOf(document, "content", 1, null, 0.9, null);
+        when(hybridRetrievalService.retrieve(any(), any())).thenReturn(outcomeOf(RetrievalOutcome.HYBRID, candidate));
+        when(documentRepository.findById(document.id())).thenReturn(Optional.of(document));
+        when(llmProvider.complete(any())).thenReturn(new LlmCompletion("Contact us at agent@example.com"));
+        when(inputGuardService.scanForPii(any()))
+                .thenReturn(new PiiAssessment(true, List.of()));
+
+        RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand("question", TraceId.generate()));
+
+        assertTrue(answer.piiDetected());
+        assertEquals("Contact us at agent@example.com", answer.answer(),
+                "the answer text itself must never be redacted - piiDetected is transparency, not mitigation");
+    }
+
+    @Test
+    void aGroundedAnswerWithoutDetectedPiiHasThePiiDetectedFlagUnset() {
+        Document document = homePremiumPolicy();
+        HybridRetrievalResult candidate = candidateOf(document, "content", 1, null, 0.9, null);
+        when(hybridRetrievalService.retrieve(any(), any())).thenReturn(outcomeOf(RetrievalOutcome.HYBRID, candidate));
+        when(documentRepository.findById(document.id())).thenReturn(Optional.of(document));
+        when(llmProvider.complete(any())).thenReturn(new LlmCompletion("Water damage is covered."));
+
+        RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand("question", TraceId.generate()));
+
+        assertFalse(answer.piiDetected());
     }
 }

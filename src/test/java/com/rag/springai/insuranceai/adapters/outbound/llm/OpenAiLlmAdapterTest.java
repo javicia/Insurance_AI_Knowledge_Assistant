@@ -59,4 +59,30 @@ class OpenAiLlmAdapterTest {
         assertThrows(PermanentProcessingException.class,
                 () -> adapter.complete(new LlmPrompt("system", "question", List.of())));
     }
+
+    @Test
+    void wrapsA429RateLimitFailureAsATransientProcessingExceptionNotPermanent() {
+        OpenAiChatModel chatModel = mock(OpenAiChatModel.class);
+        when(chatModel.call(any(Message.class), any(Message.class)))
+                .thenThrow(HttpClientErrorException.create(HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests", null,
+                        null, null));
+
+        OpenAiLlmAdapter adapter = new OpenAiLlmAdapter(chatModel);
+
+        assertThrows(TransientProcessingException.class,
+                () -> adapter.complete(new LlmPrompt("system", "question", List.of())));
+    }
+
+    @Test
+    void wrapsA408RequestTimeoutFailureAsATransientProcessingExceptionNotPermanent() {
+        OpenAiChatModel chatModel = mock(OpenAiChatModel.class);
+        when(chatModel.call(any(Message.class), any(Message.class)))
+                .thenThrow(HttpClientErrorException.create(HttpStatus.REQUEST_TIMEOUT, "Request Timeout", null, null,
+                        null));
+
+        OpenAiLlmAdapter adapter = new OpenAiLlmAdapter(chatModel);
+
+        assertThrows(TransientProcessingException.class,
+                () -> adapter.complete(new LlmPrompt("system", "question", List.of())));
+    }
 }

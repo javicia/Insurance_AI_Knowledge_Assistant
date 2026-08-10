@@ -79,6 +79,17 @@ category's own paradigm case). This is:
   a system like this one - that determination is jurisdiction- and deployment-specific and
   requires qualified legal counsel.
 
+## 4a. Article 50 transparency (FASE 14 audit remediation)
+
+Article 50's obligation to disclose that a person is interacting with an AI system (rather than a
+human) is aimed at natural-person-facing deployments where that would not otherwise be obvious.
+This system's registered purpose (`AiSystem.intendedUse`) is internal employee tooling accessed
+directly via its own API/Swagger UI - users are, by construction, aware they are calling an
+internal API, not conversing with what might be mistaken for a human colleague. This PoC therefore
+treats Article 50's disclosure obligation as not clearly triggered by this specific deployment
+shape, while explicitly not asserting that as a legal conclusion for any other deployment context
+this system might be adapted to (e.g. a consumer-facing chat widget would need this re-assessed).
+
 ## 5. Recommendation
 
 Before any production use: commission a genuine legal/compliance review against the current text

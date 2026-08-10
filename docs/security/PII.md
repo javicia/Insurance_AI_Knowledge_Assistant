@@ -35,7 +35,10 @@ decision is made: the detector's own output is safe to log/pass around by constr
    answer itself is not redacted or blocked, since a grounded answer legitimately quoting a
    retrieved document (e.g. a contact email printed in a policy document) is not itself a
    violation; see `docs/security/SECURITY.md` section 7 for why output redaction was not
-   implemented in this phase.
+   implemented in this phase. **FASE 14 audit remediation**: since the answer text is genuinely
+   unredacted, the API caller previously had no way to know this without reading server logs -
+   `RagAnswer.piiDetected` now surfaces this same detection result in the response itself
+   (transparency, not mitigation: the answer text is identical either way).
 
 ## Test evidence
 

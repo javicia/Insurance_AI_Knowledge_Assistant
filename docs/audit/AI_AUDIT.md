@@ -14,7 +14,9 @@ content log of what was asked or answered.
 ## 2. What is recorded
 
 `AuditRecord` (`domain.audit`) fields, written by `AuditService#record` (`application.audit`),
-called from every exit path of `AskInsuranceKnowledgeUseCase.ask`:
+called from every exit path of `AskInsuranceKnowledgeUseCase.ask` - including, since a FASE 14
+audit finding (AU-01), the previously-unguarded failure paths of the active-prompt lookup and
+citation-building (see `docs/adr/ADR-012-AUDIT-REMEDIATION.md`):
 
 | Field | Captures |
 |---|---|

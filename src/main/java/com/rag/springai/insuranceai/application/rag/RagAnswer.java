@@ -6,8 +6,16 @@ import java.util.Objects;
 /**
  * The result of {@code AskInsuranceKnowledgeUseCase} - matches the response shape in brief
  * section 9/10/40. Never a Spring AI type: the REST layer serializes this directly.
+ *
+ * <p><b>{@code piiDetected} (FASE 14 audit remediation):</b> {@code AskInsuranceKnowledgeUseCase}
+ * never redacts PII out of a grounded answer (deliberate - see {@code docs/security/PII.md}:
+ * redacting risks corrupting a legitimate citation quoted verbatim from a source document). Prior
+ * to this field, that detection result was only ever logged server-side, so the API caller had no
+ * way to know a returned answer might contain PII copied from a source document. This is
+ * transparency, not mitigation: the answer text itself is unchanged either way.
  */
-public record RagAnswer(String answer, List<SourceReference> sources, Grounding grounding, String traceId) {
+public record RagAnswer(String answer, List<SourceReference> sources, Grounding grounding, String traceId,
+        boolean piiDetected) {
 
     private static final String NO_ANSWER_MESSAGE =
             "I do not have sufficient information in the available documentation to answer reliably.";
@@ -29,7 +37,8 @@ public record RagAnswer(String answer, List<SourceReference> sources, Grounding 
      * chunk above the configured similarity threshold, without ever calling the LLM.
      */
     public static RagAnswer noAnswer(String traceId) {
-        return new RagAnswer(NO_ANSWER_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId);
+        return new RagAnswer(NO_ANSWER_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId,
+                false);
     }
 
     /**
@@ -39,6 +48,7 @@ public record RagAnswer(String answer, List<SourceReference> sources, Grounding 
      * simply a different reason for that than "no relevant evidence".
      */
     public static RagAnswer blocked(String traceId) {
-        return new RagAnswer(BLOCKED_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId);
+        return new RagAnswer(BLOCKED_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId,
+                false);
     }
 }

@@ -1,5 +1,6 @@
 package com.rag.springai.insuranceai.adapters.outbound.llm;
 
+import com.rag.springai.insuranceai.adapters.shared.llm.LlmFailureClassifier;
 import com.rag.springai.insuranceai.adapters.shared.llm.LlmMessageFormatter;
 import com.rag.springai.insuranceai.domain.rag.LlmCompletion;
 import com.rag.springai.insuranceai.domain.rag.LlmPrompt;
@@ -18,7 +19,8 @@ import org.springframework.web.client.HttpClientErrorException;
  * {@code insurance-ai.ai.provider: anthropic} (brief section 7/8) - swapping from OpenAI to
  * Anthropic never touches {@code AskInsuranceKnowledgeUseCase}.
  *
- * <p>Failure classification: see {@code OpenAiLlmAdapter}'s Javadoc - identical reasoning, same
+ * <p>Failure classification: see {@code OpenAiLlmAdapter}'s Javadoc - identical reasoning
+ * (including the FASE 14 429/408-as-transient refinement via {@link LlmFailureClassifier}), same
  * Spring AI auto-configured retry (FASE 11, {@code docs/resilience/RESILIENCE.md}).
  */
 @Component
@@ -41,6 +43,12 @@ public class AnthropicLlmAdapter implements LlmProvider {
             return new LlmCompletion(response);
         }
         catch (HttpClientErrorException e) {
+            if (LlmFailureClassifier.isTransientHttpStatus(e.getStatusCode())) {
+                throw new TransientProcessingException("ANTHROPIC_CHAT_COMPLETION_RATE_LIMITED",
+                        "Anthropic chat completion request was rate-limited/timed out (" + e.getStatusCode()
+                                + ") - transient, retry-safe",
+                        e);
+            }
             throw new PermanentProcessingException("ANTHROPIC_CHAT_COMPLETION_REJECTED",
                     "Anthropic rejected the chat completion request (" + e.getStatusCode() + ") - not retry-safe", e);
         }

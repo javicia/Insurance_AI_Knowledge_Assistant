@@ -88,6 +88,11 @@ insurance-ai:
       similarity-threshold: 0.75
     lexical:
       top-k: 8
+      # FASE 14 audit remediation (ADR-012): 0.0 preserves FASE 6-13 behaviour exactly (any
+      # PostgreSQL @@ match counts as grounding evidence). Not scientifically calibrated - a
+      # production deployment must raise this once real ts_rank_cd distributions from its own
+      # corpus have been observed. See docs/rag/HYBRID_SEARCH.md.
+      min-rank: 0.0
     hybrid:
       # Candidates carried into reranking, before the final-top-k cut.
       candidate-pool-size: 20
