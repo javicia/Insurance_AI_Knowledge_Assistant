@@ -1,9 +1,12 @@
 # Informe Final del Proyecto — Insurance Knowledge Assistant
 
 **Fecha de cierre**: 2026-08-10
-**Estado**: FASE 0 a FASE 13 completas + FASE 14 (auditoría técnica independiente y remediación
-autónoma) completa, `./mvnw clean verify` en verde dos veces consecutivas, quality gate superado.
-Ver `FINAL_ARCHITECTURE_AUDIT.md` para el detalle completo de la auditoría FASE 14.
+**Estado**: FASE 0 a FASE 14 completas (backend + auditoría técnica independiente y remediación
+autónoma) + FASE 15 (frontend Angular, integración Spring Boot ↔ Angular de un solo contenedor,
+Docker, y auditoría final del frontend) completa. `./mvnw clean verify`: **286 tests, 0 fallos,
+`BUILD SUCCESS`**. Imagen Docker construida y desplegada realmente, con verificación E2E manual
+contra el stack completo en ejecución. Ver `FINAL_ARCHITECTURE_AUDIT.md` (FASE 14) y
+`FINAL_FRONTEND_AUDIT.md` (FASE 15) para el detalle completo de cada auditoría.
 
 ---
 
@@ -16,9 +19,14 @@ documentación de pólizas de seguros, **estrictamente fundamentado en contenido
 citas, y sin tomar nunca una decisión de siniestros/precio/elegibilidad/suscripción**. El sistema
 informa; un humano siempre decide. Han sido 13 fases de entrega, cada una cerrada con
 `./mvnw clean verify` en verde y su propio informe de fase, seguidas de una FASE 14 de auditoría
-técnica independiente (7 auditorías paralelas, cada una instruida explícitamente a verificar el
-código real y no confiar en la documentación) y remediación autónoma de los hallazgos genuinos
-encontrados - ver `FINAL_ARCHITECTURE_AUDIT.md`.
+técnica independiente del backend (7 auditorías paralelas, cada una instruida explícitamente a
+verificar el código real y no confiar en la documentación) y remediación autónoma de los hallazgos
+genuinos encontrados - ver `FINAL_ARCHITECTURE_AUDIT.md` - y de una FASE 15 que añade un frontend
+Angular 22 completo (asistente de chat, subida/estado de documentos, vistas de lectura de
+gobernanza/auditoría/evaluación), empaquetado junto al backend en una única imagen Docker, y
+verificado mediante un flujo E2E manual real contra ese stack en ejecución - ver
+`FINAL_FRONTEND_AUDIT.md`, que incluye un defecto real encontrado y corregido durante esa
+verificación (`HttpRequestMethodNotSupportedException` sin mapear devolvía `500` en vez de `405`).
 
 **Esto es un PoC arquitectónico de nivel empresarial, NO una certificación de producción.** No ha
 pasado revisión legal, de compliance, de seguridad independiente ni pentesting. Ver sección 35
@@ -44,8 +52,10 @@ DDD + Arquitectura Hexagonal (Ports & Adapters) + Modular Monolith, con los lím
 
 Java 25 (Microsoft Build OpenJDK 25.0.4 LTS) + Spring Boot 4.1.0 + Spring AI 2.0.0, PostgreSQL 16
 + pgvector, Kafka (KRaft), Flyway, ArchUnit 1.5.0, springdoc-openapi 3.1.0, Micrometer/Actuator.
-Sin microservicios, sin Kubernetes, sin Elasticsearch/Redis, sin API Gateway — decisiones
-documentadas en ADR-001/002 y reafirmadas en cada fase posterior.
+Angular 22 (standalone components, signals, sin NgRx) + Angular Material 22 + CDK, Vitest para
+testing frontend. Sin microservicios, sin Kubernetes, sin Elasticsearch/Redis, sin API Gateway —
+decisiones documentadas en ADR-001/002 y reafirmadas en cada fase posterior; sin frontend framework
+adicional a Angular Material (ADR-013).
 
 ## 5. Resumen de fases de entrega
 
@@ -63,6 +73,7 @@ documentadas en ADR-001/002 y reafirmadas en cada fase posterior.
 | 12 | API/OpenAPI/Documentation (springdoc, README, C4, COMPONENTS) | Cerrada |
 | 13 | Final Hardening (auditoría, validación manual E2E, quality gate) | Cerrada |
 | 14 | Independent Architecture Audit + remediación autónoma (`FINAL_ARCHITECTURE_AUDIT.md`) | Cerrada |
+| 15 | Frontend Angular + integración SPA/Spring Boot + Docker single-container + auditoría final (`FINAL_FRONTEND_AUDIT.md`) | Cerrada |
 
 ## 6. Bounded contexts
 
@@ -203,6 +214,24 @@ fake determinista. Dimensiones/modelo/versión registrados junto al vector. Ver
 `/api/evaluation`), documentados vía springdoc-openapi (`/v3/api-docs`, `/swagger-ui.html`)
 generado desde el código real, nunca una spec desincronizable. Ver ADR-011.
 
+## 23bis. Frontend Angular (FASE 15)
+
+Aplicación Angular 22 (`frontend/`) con 5 rutas (Assistant/Documents/Governance/Audit/Evaluation),
+componentes standalone, signals para estado local/de servicio (sin NgRx), Angular Material + CDK,
+47 tests Vitest. Cada modelo TypeScript se corresponde con un DTO real del backend - ningún
+endpoint invocado que el backend no exponga genuinamente. Único cambio de contrato que esta fase
+introdujo en el backend: `RagAnswer.blocked` (booleano, distingue "sin evidencia relevante" de
+"bloqueado por el guardarraíl de inyección de prompt", antes indistinguibles salvo por texto
+libre), documentado y testeado. Diseño: paleta restringida, sin gradientes/glassmorphism/3D/neon,
+`StatusBadge` como único componente de estado en toda la app. Accesibilidad: contraste WCAG AA
+corregido (`--app-color-text-muted`), `aria-live`/`aria-hidden`/`aria-label` aplicados
+sistemáticamente, navegación 100% por teclado. Ver `docs/frontend/FRONTEND_ARCHITECTURE.md`,
+`docs/frontend/UI_GUIDELINES.md`, `docs/adr/ADR-013-FRONTEND-ARCHITECTURE.md`, y
+`FINAL_FRONTEND_AUDIT.md` para el detalle completo, incluyendo el flujo E2E manual ejecutado
+contra el stack Docker real (subida de documento → Kafka → embedding → pregunta fundamentada con
+citas → no-answer → bloqueo por inyección → PII pregunta/respuesta → auditoría → evaluación) y el
+defecto real encontrado y corregido durante esa verificación (sección 33bis).
+
 ## 24. Gestión de configuración
 
 `insurance-ai.*` tipado vía `@ConfigurationProperties` (`InsuranceAiProperties`), separación
@@ -211,8 +240,12 @@ fue rebajado para hacer pasar un test (verificado explícitamente en la auditor�
 
 ## 25. Docker / infraestructura local
 
-`docker-compose.yml`: solo PostgreSQL+pgvector, Kafka (KRaft) y Kafka UI — sin Elasticsearch,
-Redis, API Gateway ni Kubernetes.
+`docker-compose.yml`: PostgreSQL+pgvector, Kafka (KRaft), Kafka UI, y (desde FASE 15) el servicio
+`insurance-ai` — la imagen multi-stage que compila Angular, copia su salida a
+`src/main/resources/static/`, y empaqueta el jar de Spring Boot, sirviendo la UI y la API completas
+en un único proceso/puerto (`8080`). Sin Elasticsearch, Redis, API Gateway ni Kubernetes. Build y
+despliegue real verificados en FASE 15 (`docker compose build --no-cache` + `docker compose up -d`
+con los 4 servicios alcanzando `healthy`), no solo `docker compose config`.
 
 ## 26. Estrategia de testing y Testcontainers
 
@@ -235,14 +268,14 @@ verificado por grep directo, no solo confiando en la regla.
 ADR-001 (Hexagonal) · 002 (Modular Monolith) · 003 (Document Aggregate Boundaries) · 004 (Document
 Processing Failure Policy) · 005 (Embedding as Derived Projection) · 006 (Advanced RAG Retrieval) ·
 007 (GenAI Security Guardrails) · 008 (AI Governance Foundation) · 009 (AI Evaluation Foundation) ·
-010 (Observability and Resilience) · 011 (API Documentation) · 012 (FASE 14 Audit Remediation) —
-12 ADRs, numeración secuencial sin huecos ni duplicados.
+010 (Observability and Resilience) · 011 (API Documentation) · 012 (FASE 14 Audit Remediation) ·
+013 (Frontend Architecture) — 13 ADRs, numeración secuencial sin huecos ni duplicados.
 
 ## 29. Índice de documentación
 
-31 archivos Markdown bajo `docs/` (adr, architecture, audit, demo, evaluation, governance,
-observability, rag, resilience, security, testing) + `README.md` y `FINAL_ARCHITECTURE_AUDIT.md`
-en la raíz. Mapa completo en `README.md` sección "Documentation map".
+34 archivos Markdown bajo `docs/` (adr, architecture, audit, demo, evaluation, frontend, governance,
+observability, rag, resilience, security, testing) + `README.md`, `FINAL_ARCHITECTURE_AUDIT.md` y
+`FINAL_FRONTEND_AUDIT.md` en la raíz. Mapa completo en `README.md` sección "Documentation map".
 
 ## 30. Registro de honestidad de componentes fake/heurísticos
 
@@ -290,6 +323,25 @@ contenedores Testcontainers de este proyecto (no los del usuario, no los de otro
 de reintentar. 10 tests nuevos respecto al cierre de FASE 13 (266 → 276): 6 en
 `AskInsuranceKnowledgeUseCaseTest`, 4 en los tests de los adaptadores LLM.
 
+## 33bis. FASE 15 - integración frontend, Docker y hallazgo real
+
+Backend: 2 tests nuevos respecto al cierre de FASE 14 (276 → **286**), ambos surgidos de la
+verificación E2E manual contra el stack Docker real, no de desarrollo especulativo:
+`GlobalExceptionHandlerTest.shouldMapHttpRequestMethodNotSupportedExceptionTo405NotTheGeneric500`
+y `SpaWebConfigurationIntegrationTest.aRealApiPathCalledWithTheWrongHttpMethodIsA405NeverTheSpaFallbackOrA500`.
+Causa raíz del defecto que motivó estos tests: `HttpRequestMethodNotSupportedException` (Spring
+MVC, lanzada cuando una ruta `/api/**` real existe pero se invoca con el método HTTP incorrecto) no
+tenía `@ExceptionHandler` propio, cayendo en el genérico y devolviendo `500` en vez de `405` -
+misma categoría que el hallazgo `NoResourceFoundException` ya corregido durante la construcción de
+FASE 15. Confirmado leyendo el stack trace real en los logs del contenedor Docker, corregido con un
+handler nuevo siguiendo el patrón ya existente, verificado con `./mvnw clean verify` (**286 tests,
+0 fallos, 0 errores, 0 omitidos, `BUILD SUCCESS`**), y reverificado contra la imagen Docker
+reconstruida y redesplegada. Frontend: 47 tests Vitest (sin cambios en esta fase de auditoría
+final, ya estables). Ver `FINAL_FRONTEND_AUDIT.md` sección 15 para el detalle completo
+síntoma/causa raíz/corrección/test, y sección 14 para el resto del flujo E2E manual (subida real de
+PDF, ingestión Kafka, embedding, pregunta fundamentada, no-answer, bloqueo de inyección, PII
+pregunta/respuesta, auditoría, evaluación) ejecutado contra el contenedor en ejecución.
+
 ## 34. Verificación del quality gate
 
 Sin `BUILD FAILURE`, sin fallo de ArchUnit, sin tests en rojo, sin secretos expuestos, sin stack
@@ -300,12 +352,16 @@ implementada" — **quality gate superado**.
 ## 35. Production Gap Analysis
 
 Explícitamente fuera de alcance de este PoC (ni implementado ni simulado como implementado): IAM/
-autenticación/autorización en cualquier endpoint, API Gateway, rate limiting, WAF, integración
-SIEM, tracing distribuido más allá del `traceId` MDC personalizado, PostgreSQL/Kafka gestionados
-o de alta disponibilidad, backup/recuperación ante desastres, model risk management, monitorización
-de modelos de terceros, revisión legal/compliance/DPO formal de la autoevaluación AI Act, revisión
-de seguridad independiente o pentesting, política de retención de datos, proceso formal de
-respuesta a incidentes.
+autenticación/autorización en cualquier endpoint (incluyendo la UI Angular, que no está detrás de
+ningún login), API Gateway, rate limiting, WAF, integración SIEM, tracing distribuido más allá del
+`traceId` MDC personalizado (ahora también expuesto en la UI vía `TechnicalDetails`), PostgreSQL/
+Kafka gestionados o de alta disponibilidad, backup/recuperación ante desastres, model risk
+management, monitorización de modelos de terceros, revisión legal/compliance/DPO formal de la
+autoevaluación AI Act, revisión de seguridad independiente o pentesting, política de retención de
+datos, proceso formal de respuesta a incidentes, i18n/dark mode, y una suite automatizada de
+pruebas de navegador (Playwright/Cypress) - la validación E2E del frontend es manual/scripted
+contra el stack Docker real, no un suite headless automatizada (ver `FINAL_FRONTEND_AUDIT.md`
+secciones 17-18).
 
 ## 36. Limitaciones conocidas (consolidado)
 
@@ -317,7 +373,10 @@ ni failover automático entre proveedores LLM; sin autenticación en ninguna API
 `insurance-ai.rag.lexical.min-rank` (FASE 14) queda en `0.0` por defecto y no está calibrado
 contra ningún corpus real; sin test que verifique que el timeout HTTP configurado
 (`spring.http.clients.*`) se cumple realmente bajo condiciones de red reales (limitación
-documentada deliberadamente, para evitar un test de red potencialmente inestable).
+documentada deliberadamente, para evitar un test de red potencialmente inestable). Frontend (FASE
+15): `RuleBasedPiiGuard` sigue cubriendo solo 4 patrones españoles (email/teléfono/IBAN/DNI-NIE),
+sin número de tarjeta de pago ni cobertura de otros países; sin i18n ni dark mode (evaluados y
+descartados deliberadamente); sin suite automatizada de navegador (Playwright/Cypress).
 
 ## 37. Recomendaciones para un eventual camino a producción
 
@@ -332,21 +391,30 @@ documentada deliberadamente, para evitar un test de red potencialmente inestable
 5. Añadir observabilidad de producción (tracing distribuido, métricas centralizadas, alerting)
    más allá de lo que Actuator expone localmente.
 6. Evaluar alta disponibilidad de PostgreSQL/Kafka y una estrategia de backup/DR real.
+7. Introducir Playwright/Cypress para los flujos de UI críticos (subida→pregunta→cita, bloqueo por
+   inyección) como red de regresión visual/interactiva, complementando la suite Vitest actual.
+8. Ampliar `RuleBasedPiiGuard` con un patrón de tarjeta de pago si el caso de uso real llega a
+   manejarlas, documentando el nuevo alcance igual que los 4 patrones actuales.
 
 ## 38. Conclusión y resultado final de tests
 
-El proyecto cierra las 13 fases de entrega más una FASE 14 de auditoría técnica independiente con
-arquitectura hexagonal intacta y verificada mecánicamente, seguridad y gobernanza genuinamente
-implementadas (no solo documentadas, y ahora también re-verificadas de forma independiente), un
-pipeline RAG híbrido completo con política de no-answer y citas verificables, trazabilidad
-end-to-end demostrada con infraestructura real, y una suite de pruebas de **276 tests en verde
-(dos ejecuciones consecutivas de `./mvnw clean verify`), `BUILD SUCCESS`, exit code real `0` en
-ambas**. La auditoría FASE 14 encontró y remedió 3 hallazgos HIGH genuinos (una fuga de cobertura
-en el audit trail, un umbral de relevancia léxica ausente, y una clasificación HTTP demasiado
-gruesa), 1 hallazgo MEDIUM (transparencia de PII en la respuesta) y varios LOW/INFO menores - sin
-ningún hallazgo CRITICAL, sin ninguna capacidad de decisión automatizada de seguros, y sin ninguna
-afirmación de cumplimiento legal indebida en la documentación del AI Act. Ningún componente fake
-se presenta como real; ninguna limitación se oculta; ningún test se debilitó ni se eliminó para
-lograr este resultado. Ver `FINAL_ARCHITECTURE_AUDIT.md` para el detalle completo, hallazgo por
-hallazgo. El proyecto está listo para ser revisado como referencia arquitectónica — no para ser
-desplegado en producción sin las revisiones de la sección 37.
+El proyecto cierra las 13 fases de entrega originales, más una FASE 14 de auditoría técnica
+independiente del backend, más una FASE 15 que añade un frontend Angular completo y su propia
+verificación final, con arquitectura hexagonal intacta y verificada mecánicamente, seguridad y
+gobernanza genuinamente implementadas (no solo documentadas, y re-verificadas de forma
+independiente en dos ocasiones), un pipeline RAG híbrido completo con política de no-answer y
+citas verificables, trazabilidad end-to-end demostrada con infraestructura real - ahora incluyendo
+una UI real -, y una suite de pruebas backend de **286 tests en verde, `BUILD SUCCESS`, exit code
+real `0`**, más 47 tests Vitest en el frontend. La auditoría FASE 14 encontró y remedió 3 hallazgos
+HIGH genuinos, 1 MEDIUM y varios LOW/INFO menores en el backend. La auditoría FASE 15 encontró y
+remedió 1 hallazgo real adicional durante la verificación E2E manual contra el stack Docker en
+ejecución (`HttpRequestMethodNotSupportedException` sin mapear devolviendo `500` en vez de `405`),
+e investigó a fondo una observación sobre detección de PII que se confirmó como diseño intencionado
+y ya documentado, no un defecto (ver `FINAL_FRONTEND_AUDIT.md` secciones 15-16). Sin ningún hallazgo
+CRITICAL en ninguna de las dos auditorías, sin ninguna capacidad de decisión automatizada de
+seguros, sin ninguna afirmación de cumplimiento legal indebida. Ningún componente fake se presenta
+como real; ninguna limitación se oculta; ningún test se debilitó ni se eliminó para lograr este
+resultado. Ver `FINAL_ARCHITECTURE_AUDIT.md` (FASE 14) y `FINAL_FRONTEND_AUDIT.md` (FASE 15) para
+el detalle completo, hallazgo por hallazgo. El proyecto - backend y frontend, empaquetados en una
+única imagen Docker verificada en ejecución real - está listo para ser revisado como referencia
+arquitectónica — no para ser desplegado en producción sin las revisiones de la sección 37.

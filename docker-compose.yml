@@ -77,10 +77,45 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     ports:
       # Mapped to a non-default host port to avoid colliding with other local Kafka UI
-      # instances also using 8080.
+      # instances also using 8080 - 8080 is reserved for the `insurance-ai` application below.
       - "8081:8080"
     networks:
       - insurance-ai-net
     depends_on:
       kafka:
         condition: service_healthy
+
+  insurance-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: insurance-ai-app
+    restart: unless-stopped
+    environment:
+      # Internal-network hostnames/ports (postgres:5432, kafka:9092) - never the host-mapped
+      # 5433/9094 used by tools running outside this compose network (brief FASE 15 section 6).
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-insurance_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-insurance_ai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insurance_ai}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Defaults to the deterministic fake provider (brief section 22) - no real OpenAI/Anthropic
+      # credentials required to run the full product end to end. Override via a real .env to use
+      # a real provider.
+      INSURANCE_AI_PROVIDER: ${INSURANCE_AI_PROVIDER:-fake}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-not-configured}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-not-configured}
+    ports:
+      - "8080:8080"
+    networks:
+      - insurance-ai-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s

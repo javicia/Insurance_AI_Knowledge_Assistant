@@ -10,8 +10,10 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Translates the three exception hierarchies (domain, application, infrastructure — brief
@@ -22,6 +24,36 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * FASE 15 (Angular SPA integration): an unmapped path under {@code /api/**} deliberately
+     * never falls back to {@code index.html} ({@code SpaWebConfiguration} refuses to substitute
+     * it for anything under {@code api/}/{@code actuator/}), so Spring's resource resolution
+     * throws this exception instead - without this handler it would fall through to the generic
+     * {@link #handleUnexpectedException} and incorrectly answer with {@code 500} instead of the
+     * semantically correct {@code 404} (caught by {@code SpaWebConfigurationIntegrationTest}).
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<ErrorResponse> handleNoResourceFoundException(NoResourceFoundException exception) {
+        log.warn("No resource found for {} {}", exception.getHttpMethod(), exception.getResourcePath());
+        return respond(HttpStatus.NOT_FOUND, "NOT_FOUND", "The requested resource was not found.");
+    }
+
+    /**
+     * FASE 15 (Angular SPA integration, found alongside the {@link NoResourceFoundException} fix
+     * above via manual E2E verification of every real API route): a real, mapped {@code /api/**}
+     * path called with the wrong HTTP method (e.g. {@code GET /api/evaluation/runs}, which only
+     * supports {@code POST}) throws this exception - without this handler it falls through to the
+     * generic {@link #handleUnexpectedException} and incorrectly answers with {@code 500} instead
+     * of the semantically correct {@code 405}.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<ErrorResponse> handleHttpRequestMethodNotSupportedException(
+            HttpRequestMethodNotSupportedException exception) {
+        log.warn("Method not supported: {}", exception.getMessage());
+        return respond(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", "The requested method is not supported "
+                + "for this resource.");
+    }
 
     @ExceptionHandler(DomainException.class)
     ResponseEntity<ErrorResponse> handleDomainException(DomainException exception) {

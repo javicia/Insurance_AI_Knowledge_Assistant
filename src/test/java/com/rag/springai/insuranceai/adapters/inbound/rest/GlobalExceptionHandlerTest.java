@@ -7,11 +7,13 @@ import com.rag.springai.insuranceai.domain.shared.exception.DomainException;
 import com.rag.springai.insuranceai.domain.shared.exception.PermanentProcessingException;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
+import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,6 +52,16 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/unexpected-error")
         void unexpectedError() {
             throw new IllegalStateException("boom - internal detail that must never reach the client");
+        }
+
+        @GetMapping("/no-resource-found")
+        void noResourceFound() throws NoResourceFoundException {
+            throw new NoResourceFoundException(HttpMethod.GET, "api/this-endpoint-does-not-exist", "/**");
+        }
+
+        @org.springframework.web.bind.annotation.PostMapping("/post-only-endpoint")
+        void postOnlyEndpoint() {
+            // exists only so MockMvc's real HandlerMapping rejects a GET to it below
         }
     }
 
@@ -119,6 +131,22 @@ class GlobalExceptionHandlerTest {
         assertTrue(response.getContentAsString().contains("An unexpected error occurred."));
         assertTrue(response.getContentAsString().contains("boom") == false,
                 "the internal exception message must never be exposed to the client");
+    }
+
+    @Test
+    void shouldMapNoResourceFoundExceptionTo404NotTheGeneric500() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(get("/no-resource-found")).andReturn().getResponse();
+
+        assertEquals(404, response.getStatus());
+        assertTrue(response.getContentAsString().contains("NOT_FOUND"));
+    }
+
+    @Test
+    void shouldMapHttpRequestMethodNotSupportedExceptionTo405NotTheGeneric500() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(get("/post-only-endpoint")).andReturn().getResponse();
+
+        assertEquals(405, response.getStatus());
+        assertTrue(response.getContentAsString().contains("METHOD_NOT_ALLOWED"));
     }
 
     @Test
