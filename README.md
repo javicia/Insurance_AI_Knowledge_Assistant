@@ -11,8 +11,9 @@ A Retrieval-Augmented Generation (RAG) assistant that answers employee questions
 insurance documentation - **strictly grounded in retrieved content, with citations, and never
 making a claims/pricing/eligibility/underwriting decision.** The system informs; a human always
 decides (see `docs/governance/HUMAN_OVERSIGHT.md`). A single-page Angular UI (chat, document
-upload/status, and read views onto governance/audit/evaluation) is packaged into the same Spring
-Boot process - see [Frontend](#frontend) below.
+upload/status, and read views onto governance/audit/evaluation) is a fully independent deployable
+served behind its own API Gateway - see [Frontend](#frontend) and
+[Architecture: three independent deployables](#architecture-three-independent-deployables) below.
 
 ## Tech stack
 
@@ -28,7 +29,24 @@ Boot process - see [Frontend](#frontend) below.
 - OpenAI and Anthropic as pluggable LLM providers (`LlmProvider` port), plus a deterministic
   `fake` provider for offline testing/demo - never presented as a real provider
 
-## Architecture at a glance
+## Architecture: three independent deployables
+
+Since FASE 16 (`docs/adr/ADR-014-FRONTEND-BACKEND-SEPARATION.md`), the frontend, backend, and API
+gateway are three genuinely separate products - separate Maven/npm projects, separate Docker
+images, no shared code, no shared build, communicating only over HTTP/REST:
+
+```
+Browser → frontend (nginx, static Angular bundle)
+Browser → gateway (Spring Cloud Gateway) → backend (Spring Boot API) → PostgreSQL/Kafka/LLM
+```
+
+The frontend's JavaScript calls the gateway directly (`PUBLIC_API_BASE_URL`, injected at container
+startup - see [Frontend](#frontend)); the gateway is the only path from the browser to the backend
+API in the Docker Compose topology (the backend's own port is also published for direct developer
+access - see [Quick start](#quick-start) Option B). `scripts/verify-module-separation.sh` is an
+automated, CI-runnable check that the three deployables stay genuinely independent.
+
+## RAG pipeline at a glance
 
 ```
 Employee → guardrails (prompt injection / PII) → hybrid retrieval (semantic + lexical, RRF,
@@ -38,7 +56,7 @@ Employee → guardrails (prompt injection / PII) → hybrid retrieval (semantic 
 
 Full detail: `docs/architecture/ARCHITECTURE.md`, `docs/architecture/C4.md`,
 `docs/architecture/COMPONENTS.md`. Every architectural decision that could plausibly be
-questioned later has a numbered ADR under `docs/adr/` (currently ADR-001 through ADR-013).
+questioned later has a numbered ADR under `docs/adr/` (currently ADR-001 through ADR-014).
 
 ## Bounded contexts
 
@@ -53,11 +71,12 @@ questioned later has a numbered ADR under `docs/adr/` (currently ADR-001 through
 
 ## Quick start
 
-Two ways to run this: the full packaged product in one container (fastest way to see the whole
-thing, including the Angular UI), or the application on the host against containerized
-infrastructure only (the day-to-day development loop). Both use the same `docker-compose.yml`.
+Two ways to run this: the full product in Docker (all six services - fastest way to see the whole
+thing, including the Angular UI behind the gateway), or the backend/frontend on the host against
+containerized infrastructure only (the day-to-day development loop). Both use the same
+`docker-compose.yml`.
 
-### Option A - full product in Docker (UI included, no local Node/Angular toolchain needed)
+### Option A - full product in Docker (no local Node/Java toolchain needed)
 
 **Prerequisites**: Docker only.
 
@@ -66,22 +85,25 @@ cp .env.example .env   # defaults already work with the fake provider, no real A
 docker compose up -d --build
 ```
 
-This starts PostgreSQL, Kafka, Kafka UI, and `insurance-ai` (the Spring Boot process with the
-Angular build packaged into its static resources - see [Frontend](#frontend) and
-[Single-container deployment](#single-container-deployment) below). Once
-`docker compose ps` shows `insurance-ai-app` as `healthy`:
+This builds and starts all six services: `postgres`, `kafka`, `kafka-ui`, `backend` (Spring Boot
+API), `gateway` (Spring Cloud Gateway), and `frontend` (nginx serving the Angular build) - see
+[Architecture: three independent deployables](#architecture-three-independent-deployables). Once
+`docker compose ps` shows all of them `healthy`:
 
-- **Application (UI + API)**: `http://localhost:8080/` (redirects into the Angular app)
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- **Application (UI)**: `http://localhost:8083/` - the frontend calls the gateway directly from
+  the browser
+- **API (via gateway)**: `http://localhost:8082/api/**`
+- **Backend directly** (developer convenience - Swagger UI, `curl`): `http://localhost:8080`,
+  `http://localhost:8080/swagger-ui.html`
 - Kafka UI: `http://localhost:8081`
 
-### Option B - application on the host, infrastructure in Docker (development loop)
+### Option B - backend/frontend on the host, infrastructure in Docker (development loop)
 
-**1. Prerequisites**: Docker, Java 25, Maven Wrapper (`./mvnw`, bundled). Node.js 20+ only if
-you're also working on the frontend (see [Frontend](#frontend)).
+**1. Prerequisites**: Docker, Java 25, Maven Wrapper (`./mvnw`, bundled, under `backend/`).
+Node.js 20+ only if you're also working on the frontend (see [Frontend](#frontend)).
 
 **2. Start local infrastructure** (PostgreSQL + pgvector, Kafka, Kafka UI - nothing else; no
-Elasticsearch/Redis/API Gateway, see `docker-compose.yml`):
+Elasticsearch/Redis, see `docker-compose.yml`):
 
 ```bash
 docker compose up -d postgres kafka kafka-ui
@@ -101,13 +123,15 @@ cp .env.example .env
 **4. Run the backend** (Flyway migrates the schema automatically on startup):
 
 ```bash
+cd backend
 ./mvnw spring-boot:run
 # or, to run without any real LLM credentials:
 INSURANCE_AI_PROVIDER=fake ./mvnw spring-boot:run
 ```
 
 **5. Run the frontend** (separate terminal - `proxy.conf.json` forwards `/api`/`/actuator` to
-`:8080`, so both dev servers work against the same backend):
+`:8080`, so `ng serve` talks directly to the host-run backend without needing the gateway for local
+iteration):
 
 ```bash
 cd frontend
@@ -115,15 +139,26 @@ npm install
 npm start   # http://localhost:4200, live-reloading
 ```
 
-**6. Explore the API**: `http://localhost:8080/swagger-ui.html` (OpenAPI docs, generated from the
+**6. (Optional) Run the gateway too**, if you're specifically iterating on gateway behavior
+(routing, CORS, rate limiting):
+
+```bash
+cd gateway
+./mvnw spring-boot:run
+# gateway on :8082, routing to the backend on :8080
+```
+
+**7. Explore the API**: `http://localhost:8080/swagger-ui.html` (OpenAPI docs, generated from the
 real controllers - see `docs/adr/ADR-011-API-DOCUMENTATION.md`). Health check:
 `http://localhost:8080/actuator/health`.
 
-**7. Run the test suites**:
+**8. Run the test suites**:
 
 ```bash
-./mvnw clean verify              # backend: unit + real-Postgres/Kafka integration (Testcontainers)
-cd frontend && npm test -- --watch=false   # frontend: Vitest unit/component/interceptor tests
+cd backend && ./mvnw clean verify           # unit + real-Postgres/Kafka integration (Testcontainers)
+cd frontend && npm test -- --watch=false    # Vitest unit/component/interceptor tests
+cd gateway && ./mvnw clean verify           # routing/CORS/correlation-id tests
+./scripts/verify-module-separation.sh       # confirms no cross-module coupling regressed
 ```
 
 See `docs/testing/TESTCONTAINERS.md` for why backend containers are reused across the suite and
@@ -139,7 +174,8 @@ how per-test isolation is achieved without starting a new container per test cla
 | `GET /api/audit/**` | Look up the audit record for a request by `traceId` |
 | `POST/GET /api/evaluation/**` | Run and inspect the built-in evaluation dataset |
 
-Full request/response shapes: `/swagger-ui.html` once the app is running. A minimal example:
+Full request/response shapes: `/swagger-ui.html` once the app is running. A minimal example
+(directly against the backend; replace `8080` with `8082` to go through the gateway instead):
 
 ```bash
 curl -X POST http://localhost:8080/api/chat \
@@ -157,24 +193,28 @@ no-answer policy).
 `frontend/` is a standalone Angular 22 application (standalone components, signals, Angular
 Material, Vitest) covering five routes: the Assistant chat (home screen), Documents
 (upload + session-tracked ingestion status), and read-only Governance/Audit/Evaluation views onto
-the backend's existing endpoints. It calls the backend exclusively through `/api/**` (relative
-paths, same origin) - no hardcoded host/port, no CORS configuration needed in any deployment mode.
-See `docs/frontend/FRONTEND_ARCHITECTURE.md` (directory structure, state management, testing),
-`docs/frontend/UI_GUIDELINES.md` (design tokens, components, accessibility), and
-`docs/adr/ADR-013-FRONTEND-ARCHITECTURE.md` (why Angular/Material/signals/single-container, not
-alternatives).
+the backend's existing endpoints. Since FASE 16, it is a fully independent deployable: its own
+Dockerfile builds the Angular bundle and serves it from `nginxinc/nginx-unprivileged` - no JVM, no
+Maven, no shared build with the backend. It knows exactly one external fact,
+`PUBLIC_API_BASE_URL` (the gateway's browser-reachable URL), injected at container startup by
+`docker-entrypoint.sh` into a generated `env.js` - never a database URL, Kafka URL, LLM credential,
+or internal service hostname, and never baked into the build (the same image is deployable against
+any environment's gateway URL without a rebuild). See `docs/frontend/FRONTEND_ARCHITECTURE.md`
+(directory structure, state management, testing), `docs/frontend/UI_GUIDELINES.md` (design tokens,
+components, accessibility), `docs/adr/ADR-013-FRONTEND-ARCHITECTURE.md` (why Angular/Material/
+signals), and `docs/adr/ADR-014-FRONTEND-BACKEND-SEPARATION.md` (why it is now independently
+deployed, superseding ADR-013's single-container packaging).
 
-## Single-container deployment
+## API Gateway
 
-The Docker image (`Dockerfile`, multi-stage) compiles the Angular app (`npm ci && npm run build`),
-copies its output into `src/main/resources/static/`, then builds the Spring Boot jar - so the
-final image is one process serving both the UI and the API on port `8080`, with no reverse proxy,
-no second exposed port, and no CORS configuration. `SpaWebConfiguration` resolves any
-non-API/non-actuator path to `index.html` so Angular's router handles client-side navigation and
-direct URL refresh (`/assistant`, `/documents`, ...) correctly, while an unmapped `/api/**` path
-still gets a real `404`/`405` rather than silently serving HTML. `./mvnw clean verify` itself never
-invokes Node - the frontend build only happens inside the Docker image build - so backend-only
-contributors and CI are unaffected by the frontend toolchain.
+`gateway/` is a genuinely separate Spring Cloud Gateway (WebFlux) Maven module and Docker image -
+it shares no code with `backend/`, only an HTTP contract. It routes `/api/chat/**`,
+`/api/documents/**`, `/api/governance/**`, `/api/audit/**`, and `/api/evaluation/**` to the
+backend, enforces CORS against the frontend's origin, and assigns `X-Trace-Id` at the true edge of
+the system if a client didn't already supply one (the backend's own `TraceIdFilter` reuses whatever
+value it receives, so one trace id covers the full journey). See
+`docs/adr/ADR-014-FRONTEND-BACKEND-SEPARATION.md` decision 7; deeper gateway hardening (rate
+limiting, JWT propagation) is tracked as FASE 19/21 in `ENTERPRISE_HARDENING_DISCOVERY.md`.
 
 ## Demo data
 

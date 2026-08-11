@@ -7,8 +7,37 @@ networks:
 volumes:
   postgres-data:
   kafka-data:
+  keycloak-data:
 
 services:
+  keycloak:
+    # FASE 17 (IAM): a real, self-contained OIDC identity provider - PoC-labeled (dev mode,
+    # HTTP, no TLS termination), not a hand-rolled auth mechanism (brief section: "No implementes
+    # autenticacion casera"). Realm/clients/roles/test users are declaratively imported from
+    # infra/keycloak/realm-export.json at startup, not clicked together by hand, so this
+    # environment is reproducible. See docs/security/IAM_ARCHITECTURE.md.
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: insurance-ai-keycloak
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      - keycloak-data:/opt/keycloak/data
+    ports:
+      - "8180:8080"
+    networks:
+      - insurance-ai-net
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 45s
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: insurance-ai-postgres
@@ -76,8 +105,6 @@ services:
       KAFKA_CLUSTERS_0_NAME: insurance-ai
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     ports:
-      # Mapped to a non-default host port to avoid colliding with other local Kafka UI
-      # instances also using 8080 - 8080 is reserved for the `insurance-ai` application below.
       - "8081:8080"
     networks:
       - insurance-ai-net
@@ -85,26 +112,35 @@ services:
       kafka:
         condition: service_healthy
 
-  insurance-ai:
+  # FASE 16 (frontend/backend separation, ADR-014): three independently built/deployed
+  # services replace the former single combined `insurance-ai` image - backend, gateway, and
+  # frontend each have their own Dockerfile and share no build, no artifact, no source. The
+  # browser talks to `frontend` for static assets and to `gateway` for every API call
+  # (PUBLIC_API_BASE_URL, injected at frontend container startup) - it never talks to `backend`
+  # directly in this topology.
+
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: insurance-ai-app
+    container_name: insurance-ai-backend
     restart: unless-stopped
     environment:
       # Internal-network hostnames/ports (postgres:5432, kafka:9092) - never the host-mapped
-      # 5433/9094 used by tools running outside this compose network (brief FASE 15 section 6).
+      # 5433/9094 used by tools running outside this compose network.
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-insurance_ai}
       POSTGRES_USER: ${POSTGRES_USER:-insurance_ai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insurance_ai}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      # Defaults to the deterministic fake provider (brief section 22) - no real OpenAI/Anthropic
-      # credentials required to run the full product end to end. Override via a real .env to use
-      # a real provider.
+      # Defaults to the deterministic fake provider - no real OpenAI/Anthropic credentials
+      # required to run the full product end to end. Override via a real .env for a real provider.
       INSURANCE_AI_PROVIDER: ${INSURANCE_AI_PROVIDER:-fake}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-not-configured}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-not-configured}
     ports:
+      # Published for direct developer access (Swagger UI, curl) - real network segmentation
+      # (removing this and routing every external call through the gateway/WAF only) is FASE 40's
+      # concern, see docs/architecture/NETWORK_SEGMENTATION.md.
       - "8080:8080"
     networks:
       - insurance-ai-net
@@ -119,3 +155,48 @@ services:
       timeout: 5s
       retries: 10
       start_period: 90s
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: insurance-ai-gateway
+    restart: unless-stopped
+    environment:
+      INSURANCE_AI_BACKEND_URI: http://backend:8080
+      # The browser-facing origin of the frontend container (host-mapped port, not the internal
+      # Docker network address - CORS is enforced against what the browser itself sends as
+      # `Origin`).
+      INSURANCE_AI_ALLOWED_ORIGIN: ${INSURANCE_AI_ALLOWED_ORIGIN:-http://localhost:8083}
+    ports:
+      - "8082:8082"
+    networks:
+      - insurance-ai-net
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8082/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: insurance-ai-frontend
+    restart: unless-stopped
+    environment:
+      # The one thing the frontend is allowed to know (brief section 47) - the gateway's
+      # browser-reachable URL, injected into env.js at container startup. Never a database URL,
+      # Kafka URL, LLM credential, or internal service hostname.
+      PUBLIC_API_BASE_URL: ${INSURANCE_AI_PUBLIC_API_BASE_URL:-http://localhost:8082}
+    ports:
+      - "8083:8080"
+    networks:
+      - insurance-ai-net
+    depends_on:
+      gateway:
+        condition: service_healthy

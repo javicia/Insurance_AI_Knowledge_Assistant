@@ -1,0 +1,159 @@
+spring:
+  application:
+    name: insurance-knowledge-assistant
+  http:
+    clients:
+      # FASE 11: bounds every auto-configured RestClient/WebClient (including Spring AI's OpenAI/
+      # Anthropic HTTP clients) so a provider outage/hang cannot leave a POST /api/chat request
+      # blocked indefinitely - see docs/resilience/RESILIENCE.md.
+      connect-timeout: 5s
+      read-timeout: 30s
+  ai:
+    retry:
+      # Spring AI auto-configures a RetryTemplate around every ChatModel#call (spring-ai-
+      # autoconfigure-retry) - its own defaults (10 attempts, backoff up to 3 minutes between
+      # attempts) are tuned for a batch/background caller, not a synchronous POST /api/chat
+      # request, where a caller should get a definitive answer or a 502/503 in a few seconds.
+      # on-client-errors is left at its default (false): a 4xx is not retry-safe and is
+      # classified as such by OpenAiLlmAdapter/AnthropicLlmAdapter - see
+      # docs/resilience/RESILIENCE.md.
+      max-attempts: 3
+      backoff:
+        initial-interval: 500ms
+        multiplier: 2
+        max-interval: 3s
+    # Spring AI's OpenAI/Anthropic auto-configuration requires a non-empty credential to even
+    # build its client beans, regardless of whether a model call is ever made - the placeholder
+    # below only lets the application context boot cleanly without real API keys. Real keys are
+    # supplied via the OPENAI_API_KEY / ANTHROPIC_API_KEY environment variables (see
+    # .env.example) and never committed.
+    #
+    # FASE 5 update: LlmProvider adapter selection (OpenAiLlmAdapter/AnthropicLlmAdapter) is now
+    # conditional on insurance-ai.ai.provider (only the selected one becomes a Spring bean), so
+    # a wrong/missing OpenAI key never breaks an Anthropic-configured deployment's chat flow.
+    # It does NOT remove the OpenAI key requirement entirely, though: embeddings always use
+    # OpenAI regardless of the chat provider, because Anthropic has no embeddings API - see
+    # docs/rag/EMBEDDINGS.md. This is a real technical constraint, not a leftover TODO.
+    openai:
+      api-key: ${OPENAI_API_KEY:not-configured}
+      embedding:
+        # 1536 dimensions - see docs/rag/EMBEDDINGS.md and V3__vector_store.sql's embedding
+        # column width, which must match exactly.
+        model: text-embedding-3-small
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:not-configured}
+    vectorstore:
+      pgvector:
+        # Schema ownership belongs to Flyway (db/migration), not Spring AI's own schema
+        # auto-initialization: the vector_store table itself is created by a dedicated
+        # V3__vector_store.sql migration once the VectorStore adapter is implemented in
+        # FASE 5, not by this starter reaching for the database on its own (brief section 36).
+        initialize-schema: false
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/insurance_ai}
+    username: ${POSTGRES_USER:insurance_ai}
+    password: ${POSTGRES_PASSWORD:insurance_ai}
+  flyway:
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Internal Docker network address (fast, reliable) - deliberately NOT the same value
+          # as insurance-ai.security.oauth2.issuer below, see that property's Javadoc for why.
+          jwk-set-uri: ${INSURANCE_AI_OIDC_JWK_SET_URI:http://localhost:8180/realms/insurance-ai/protocol/openid-connect/certs}
+  kafka:
+    # EXTERNAL listener of the docker-compose Kafka broker (see docker-compose.yml). Tests
+    # override this via Testcontainers' @ServiceConnection, never talking to this address.
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: insurance-ai-document-processor
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # Wraps JsonDeserializer so a malformed record is handed to the error handler instead of
+      # crashing the consumer thread.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        # Only this package's events may be deserialized - defensive against deserializing
+        # arbitrary classes from untrusted producers (brief section 19's spirit applied to
+        # messaging, not just LLM input).
+        spring.json.trusted.packages: com.rag.springai.insuranceai.adapters.shared.messaging
+
+insurance-ai:
+  rag:
+    # Initial PoC parameters, not scientifically tuned - to be calibrated against real
+    # relevance/faithfulness metrics in FASE 10 (Evaluation). See docs/rag/HYBRID_SEARCH.md.
+    semantic:
+      top-k: 8
+      # FASE 5's original production value, unchanged - calibrated against real OpenAI
+      # embeddings, never lowered to accommodate the fake/test embedding provider (see
+      # RagPipelineIntegrationTest's own @TestPropertySource override instead).
+      similarity-threshold: 0.75
+    lexical:
+      top-k: 8
+      # FASE 14 audit remediation (ADR-012): 0.0 preserves FASE 6-13 behaviour exactly (any
+      # PostgreSQL @@ match counts as grounding evidence). Not scientifically calibrated - a
+      # production deployment must raise this once real ts_rank_cd distributions from its own
+      # corpus have been observed. See docs/rag/HYBRID_SEARCH.md.
+      min-rank: 0.0
+    hybrid:
+      # Candidates carried into reranking, before the final-top-k cut.
+      candidate-pool-size: 20
+      final-top-k: 8
+      # Reciprocal Rank Fusion smoothing constant - 60 is the original RRF paper's (Cormack et
+      # al., 2009) value, a reasonable PoC starting point, not independently re-derived here.
+      rrf-k: 60
+    reranking:
+      enabled: true
+    query-expansion:
+      enabled: false
+      max-expanded-terms: 3
+    context:
+      # PoC approximation of a context window budget - character count, not real token
+      # counting. See docs/rag/HYBRID_SEARCH.md.
+      max-characters: 6000
+  security:
+    prompt-injection:
+      enabled: true
+    pii:
+      enabled: true
+    oauth2:
+      # Always the browser-facing address (see the OAuth2 record's Javadoc) - identical whether
+      # the backend runs on the host or inside docker-compose, because this is what actually
+      # appears in every token's iss claim regardless of who is validating it.
+      issuer: ${INSURANCE_AI_OIDC_ISSUER:http://localhost:8180/realms/insurance-ai}
+  governance:
+    audit:
+      enabled: true
+  evaluation:
+    thresholds:
+      # PoC-level quality gate (brief FASE 10 section 10) - not scientifically calibrated,
+      # a starting point for the built-in dataset's 4 in-scope / 3 out-of-scope cases (see
+      # InsuranceEvaluationDataset). A production deployment would recalibrate these against a
+      # much larger labelled dataset before trusting them as a real regression gate.
+      min-grounding-rate: 1.0
+      min-no-answer-accuracy: 1.0
+      min-recall-at-k: 0.75
+  ai:
+    # openai | anthropic | fake. "fake" selects deterministic offline adapters for
+    # environments without provider credentials (brief section 17/18) - never use in
+    # production. Overridable so local validation runs don't require editing this file.
+    provider: ${INSURANCE_AI_PROVIDER:openai}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # FASE 11: only health/info/metrics - never "*" (no env/beans/heapdump/shutdown exposed
+        # unauthenticated, matching this PoC's "no IAM introduced" stance - see
+        # docs/observability/OBSERVABILITY.md).
+        include: health,info,metrics
+  endpoint:
+    health:
+      # Never leak DB/Kafka connection details in an unauthenticated response (Boot's own
+      # default - kept explicit here so it is not accidentally loosened to "always").
+      show-details: never

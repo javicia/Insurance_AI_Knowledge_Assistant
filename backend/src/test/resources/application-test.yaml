@@ -1,0 +1,32 @@
+# Test-only overrides, layered on top of src/main/resources/application.yaml (profile-specific
+# files are additive/merge, never a full replacement - see docs/testing/TESTCONTAINERS.md).
+# Activated by @ActiveProfiles("test") on every @SpringBootTest class so they all share one
+# Spring TestContext cache key, and therefore one shared Postgres + one shared Kafka container
+# pair for the whole suite within a single Maven invocation.
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Never actually dialed by the test suite: MockMvc-based security tests use
+          # spring-security-test's jwt() request post-processor, which injects a pre-built
+          # Authentication directly and bypasses JwtDecoder entirely - see
+          # SecurityAuthorizationIntegrationTest. This value only needs to be syntactically a
+          # URI so InsuranceAiProperties/OAuth2ResourceServerProperties bind successfully.
+          jwk-set-uri: http://localhost:19999/realms/insurance-ai-test/protocol/openid-connect/certs
+
+insurance-ai:
+  security:
+    oauth2:
+      issuer: http://localhost:19999/realms/insurance-ai-test
+  ai:
+    # No automated test may require real OpenAI/Anthropic credentials (brief FASE 5 section 29) -
+    # "fake" is a safe, harmless default for the ~7 test classes that never touch the RAG/LLM
+    # subsystem at all, and is exactly what RagPipelineIntegrationTest already needed.
+    provider: fake
+  rag:
+    semantic:
+      # Test-only override of the fake embedding provider's similarity distribution - never the
+      # production value (application.yaml keeps 0.75 untouched). See docs/rag/HYBRID_SEARCH.md
+      # and RagPipelineIntegrationTest's Javadoc for the full rationale.
+      similarity-threshold: 0.5

@@ -1,0 +1,84 @@
+{
+  "realm": "insurance-ai",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "roles": {
+    "realm": [
+      { "name": "AI_USER", "description": "Employee asking questions of the assistant and uploading documents." },
+      { "name": "AI_GOVERNANCE_ADMIN", "description": "Manages the AI System/Model/Prompt Registry and Risk Assessments." },
+      { "name": "AI_AUDITOR", "description": "Read-only access to the AI Audit trail." },
+      { "name": "AI_EVALUATION_ADMIN", "description": "Runs and inspects the AI Evaluation dataset." }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "insurance-ai-frontend",
+      "name": "Insurance AI Assistant (Angular SPA)",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "http://localhost:8083/*",
+        "http://localhost:4200/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8083",
+        "http://localhost:4200"
+      ]
+    },
+    {
+      "clientId": "insurance-ai-gateway",
+      "name": "Insurance AI Gateway (resource server introspection/testing client)",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "secret": "gateway-dev-secret-never-used-in-production"
+    }
+  ],
+  "users": [
+    {
+      "username": "alice.user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "alice.user@example-insurer.test",
+      "credentials": [ { "type": "password", "value": "alice-password", "temporary": false } ],
+      "realmRoles": [ "AI_USER" ]
+    },
+    {
+      "username": "bob.governance",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob.governance@example-insurer.test",
+      "credentials": [ { "type": "password", "value": "bob-password", "temporary": false } ],
+      "realmRoles": [ "AI_GOVERNANCE_ADMIN" ]
+    },
+    {
+      "username": "carol.auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "carol.auditor@example-insurer.test",
+      "credentials": [ { "type": "password", "value": "carol-password", "temporary": false } ],
+      "realmRoles": [ "AI_AUDITOR" ]
+    },
+    {
+      "username": "dave.evaluator",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "dave.evaluator@example-insurer.test",
+      "credentials": [ { "type": "password", "value": "dave-password", "temporary": false } ],
+      "realmRoles": [ "AI_EVALUATION_ADMIN" ]
+    }
+  ]
+}

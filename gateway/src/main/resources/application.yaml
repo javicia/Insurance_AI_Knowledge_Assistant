@@ -1,0 +1,50 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: insurance-ai-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # Explicit routes only (brief FASE 19 section 6) - the gateway knows route paths and
+          # technical policy, never Document/RAG/Governance/Audit domain concepts.
+          routes:
+            - id: chat
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/chat/**
+            - id: documents
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/documents/**
+            - id: governance
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/governance/**
+            - id: audit
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/audit/**
+            - id: evaluation
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/evaluation/**
+          globalcors:
+            cors-configurations:
+              "[/**]":
+                allowedOrigins: ${INSURANCE_AI_ALLOWED_ORIGIN:http://localhost:4200}
+                allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+                allowedHeaders: "*"
+                allowCredentials: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

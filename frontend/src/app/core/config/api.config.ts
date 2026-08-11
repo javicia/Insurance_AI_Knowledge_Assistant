@@ -1,11 +1,23 @@
 /**
- * Same-origin API base (brief FASE 15 section 40) - never a hardcoded host/port. In both `ng
- * serve` (via proxy.conf.json, forwarding /api and /actuator to the backend) and the packaged
- * single-container production build (Spring Boot serving both the SPA and /api/**), a relative
- * path resolves correctly with no environment-specific branching needed.
+ * FASE 16 (frontend/backend separation, brief section 47): the frontend is now an independent
+ * deployable that knows only `PUBLIC_API_BASE_URL` - never a database URL, Kafka URL, LLM
+ * credential, or internal service URL. That value is injected at container startup (never baked
+ * into the build, see `docker-entrypoint.sh` and `public/env.js`) as `window.__env
+ * .PUBLIC_API_BASE_URL` and read here once at module load. An empty string (the local-dev default
+ * in `public/env.js`, and `env.js` being entirely absent under `ng serve`) resolves to a
+ * same-origin relative path, which is what `proxy.conf.json` relies on for the local development
+ * loop - the fallback is not a special case, it is what an empty configured base URL always means.
  */
-export const API_BASE_URL = '/api';
-export const ACTUATOR_BASE_URL = '/actuator';
+declare global {
+  interface Window {
+    __env?: { PUBLIC_API_BASE_URL?: string };
+  }
+}
+
+const configuredBaseUrl = typeof window !== 'undefined' ? window.__env?.PUBLIC_API_BASE_URL ?? '' : '';
+
+export const API_BASE_URL = `${configuredBaseUrl}/api`;
+export const ACTUATOR_BASE_URL = `${configuredBaseUrl}/actuator`;
 
 /** Must match com.rag.springai.insuranceai.infrastructure.observability.TraceIdFilter exactly. */
 export const TRACE_ID_HEADER = 'X-Trace-Id';
