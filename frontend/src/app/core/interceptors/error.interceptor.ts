@@ -2,6 +2,7 @@ import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 
+import { AuthService } from '../auth/auth.service';
 import { TRACE_ID_HEADER } from '../config/api.config';
 import type { ApiError, ErrorResponse } from '../models/api-error.model';
 import { TraceContextService } from '../services/trace-context.service';
@@ -47,11 +48,19 @@ const FALLBACK_MESSAGES: Readonly<Record<number, string>> = {
  */
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const traceContext = inject(TraceContextService);
+  const authService = inject(AuthService);
 
   return next(req).pipe(
     catchError((error: unknown) => {
       if (!(error instanceof HttpErrorResponse)) {
         return throwError(() => error);
+      }
+
+      if (error.status === 401 && authService.isAuthenticated()) {
+        // A previously-valid session's access token was rejected mid-use (expired, revoked, or
+        // Keycloak restarted) - re-authenticating is the only correct recovery, not silently
+        // retrying the same request with the same now-invalid token.
+        authService.login();
       }
 
       const headerTraceId = error.headers.get(TRACE_ID_HEADER);

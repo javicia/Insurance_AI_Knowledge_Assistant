@@ -31,6 +31,7 @@ import com.rag.springai.insuranceai.application.security.InputGuardService;
 import com.rag.springai.insuranceai.ports.outbound.DocumentRepository;
 import com.rag.springai.insuranceai.ports.outbound.LlmProvider;
 import com.rag.springai.insuranceai.ports.outbound.PromptRepository;
+import com.rag.springai.insuranceai.ports.outbound.SecurityEventPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,10 +74,11 @@ class AskInsuranceKnowledgeUseCaseTest {
     private final PromptRepository promptRepository = mock(PromptRepository.class);
     private final AuditService auditService = mock(AuditService.class);
     private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final SecurityEventPort securityEventLogger = mock(SecurityEventPort.class);
 
     private final AskInsuranceKnowledgeUseCase useCase = new AskInsuranceKnowledgeUseCase(hybridRetrievalService,
             llmProvider, documentRepository, properties, inputGuardService, promptRepository, auditService,
-            meterRegistry);
+            meterRegistry, securityEventLogger);
 
     @BeforeEach
     void stubGuardsAsClean() {
@@ -133,7 +135,7 @@ class AskInsuranceKnowledgeUseCaseTest {
 
     private AskInsuranceKnowledgeUseCase useCaseWithProperties(InsuranceAiProperties props) {
         return new AskInsuranceKnowledgeUseCase(hybridRetrievalService, llmProvider, documentRepository, props,
-                inputGuardService, promptRepository, auditService, meterRegistry);
+                inputGuardService, promptRepository, auditService, meterRegistry, securityEventLogger);
     }
 
     private HybridRetrievalOutcome outcomeOf(RetrievalOutcome retrievalOutcome, HybridRetrievalResult... candidates) {

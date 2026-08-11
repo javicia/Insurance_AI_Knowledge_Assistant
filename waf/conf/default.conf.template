@@ -1,0 +1,52 @@
+# FASE 20/21: single browser-facing edge (see waf/Dockerfile and docs/adr/ADR-016-WAF-EDGE.md) -
+# ModSecurity + OWASP CRS applied to every request, then routed by path: /api/** to the gateway,
+# everything else to the frontend's static Angular bundle. Plain HTTP only (matches the rest of
+# this PoC stack, e.g. Keycloak's own sslRequired: none) - no TLS termination configured here.
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen 8080 default_server;
+    server_name _;
+
+    # ModSecurity itself is enabled globally by the base image's own untouched
+    # conf.d/modsecurity.conf.template (included automatically alongside this file via nginx's
+    # `include conf.d/*.conf` directive) - repeating "modsecurity on"/"modsecurity_rules_file"
+    # here would load the same 1858-rule CRS rule set a second time and fail to start with a
+    # "duplicated rule id" error (found and fixed empirically against the real image, not assumed).
+
+    client_max_body_size 20m;
+
+    location /api/ {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass_header Authorization;
+        proxy_http_version 1.1;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+        proxy_pass ${API_BACKEND};
+    }
+
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+        proxy_pass ${FRONTEND_BACKEND};
+    }
+
+    location = /healthz {
+        access_log off;
+        modsecurity off;
+        add_header Content-Type text/plain;
+        return 200 "OK";
+    }
+}

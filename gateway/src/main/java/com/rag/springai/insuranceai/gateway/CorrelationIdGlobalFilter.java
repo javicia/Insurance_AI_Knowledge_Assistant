@@ -39,6 +39,8 @@ public class CorrelationIdGlobalFilter implements WebFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return Ordered.HIGHEST_PRECEDENCE;
+        // Runs immediately after TrustedHeaderStrippingFilter (HIGHEST_PRECEDENCE) - a spoofed
+        // identity header must never be present even transiently before this filter runs.
+        return Ordered.HIGHEST_PRECEDENCE + 1;
     }
 }

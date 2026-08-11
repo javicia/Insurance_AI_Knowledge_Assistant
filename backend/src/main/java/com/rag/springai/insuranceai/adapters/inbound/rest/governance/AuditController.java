@@ -2,8 +2,16 @@ package com.rag.springai.insuranceai.adapters.inbound.rest.governance;
 
 import com.rag.springai.insuranceai.application.audit.AuditRecordNotFoundException;
 import com.rag.springai.insuranceai.application.audit.AuditService;
+import com.rag.springai.insuranceai.domain.security.SecurityEvent;
+import com.rag.springai.insuranceai.domain.security.SecurityEventOutcome;
+import com.rag.springai.insuranceai.domain.security.SecurityEventType;
+import com.rag.springai.insuranceai.domain.shared.TraceId;
+import com.rag.springai.insuranceai.infrastructure.security.SecurityEventLogger;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.MDC;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,16 +28,19 @@ import java.util.List;
 class AuditController {
 
     private final AuditService auditService;
+    private final SecurityEventLogger securityEventLogger;
 
-    AuditController(AuditService auditService) {
+    AuditController(AuditService auditService, SecurityEventLogger securityEventLogger) {
         this.auditService = auditService;
+        this.securityEventLogger = securityEventLogger;
     }
 
     @GetMapping("/traces/{traceId}")
     @Operation(summary = "Get the audit record for one request",
             description = "traceId is the same identifier returned in every API response and logged via MDC - "
                     + "use it to look up exactly what happened for a given request.")
-    AuditRecordResponse getByTraceId(@PathVariable String traceId) {
+    AuditRecordResponse getByTraceId(@PathVariable String traceId, HttpServletRequest request) {
+        logAuditAccess(request);
         return auditService.findByTraceId(traceId)
                 .map(AuditRecordResponse::from)
                 .orElseThrow(() -> new AuditRecordNotFoundException(traceId));
@@ -37,7 +48,22 @@ class AuditController {
 
     @GetMapping("/recent")
     @Operation(summary = "List the most recent audit records, newest first")
-    List<AuditRecordResponse> recent(@RequestParam(defaultValue = "20") int limit) {
+    List<AuditRecordResponse> recent(@RequestParam(defaultValue = "20") int limit, HttpServletRequest request) {
+        logAuditAccess(request);
         return auditService.findRecent(limit).stream().map(AuditRecordResponse::from).toList();
+    }
+
+    /** Who looked up what audit record, and when, is itself security-relevant (brief FASE 23) -
+     *  logged for every access attempt, success or not, since an {@link AuditRecordNotFoundException}
+     *  still reveals that a given traceId was probed. */
+    private void logAuditAccess(HttpServletRequest request) {
+        String traceId = MDC.get(TraceId.MDC_KEY);
+        if (traceId == null) {
+            traceId = TraceId.generate().value();
+        }
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        String principalId = authentication != null ? authentication.getName() : null;
+        securityEventLogger.log(SecurityEvent.now(SecurityEventType.AUDIT_ACCESS, SecurityEventOutcome.DETECTED,
+                traceId, principalId, request.getMethod(), request.getRequestURI(), null, null));
     }
 }

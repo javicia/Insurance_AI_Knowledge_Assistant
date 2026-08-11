@@ -10,7 +10,12 @@
  */
 declare global {
   interface Window {
-    __env?: { PUBLIC_API_BASE_URL?: string };
+    __env?: {
+      PUBLIC_API_BASE_URL?: string;
+      /** FASE 18 - see oidc.config.ts for how these two are used. */
+      PUBLIC_OIDC_ISSUER?: string;
+      PUBLIC_OIDC_CLIENT_ID?: string;
+    };
   }
 }
 

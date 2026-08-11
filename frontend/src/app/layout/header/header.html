@@ -26,4 +26,23 @@
     <span class="header__status-dot" aria-hidden="true"></span>
     <span class="header__status-label">{{ statusLabel() }}</span>
   </div>
+
+  @if (auth.isAuthenticated()) {
+    <button
+      type="button"
+      mat-icon-button
+      class="header__user-menu-trigger"
+      [matMenuTriggerFor]="userMenu"
+      [attr.aria-label]="'Signed in as ' + (auth.username() ?? 'user') + ' - account menu'"
+    >
+      <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">account_circle</mat-icon>
+    </button>
+    <mat-menu #userMenu="matMenu">
+      <div class="header__user-menu-identity" role="note">{{ auth.username() ?? 'Signed in' }}</div>
+      <button type="button" mat-menu-item (click)="logout()">
+        <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">logout</mat-icon>
+        <span>Sign out</span>
+      </button>
+    </mat-menu>
+  }
 </header>

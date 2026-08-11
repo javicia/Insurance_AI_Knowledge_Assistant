@@ -24,6 +24,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -66,7 +67,11 @@ class KeycloakJwtValidationTest {
     }
 
     private String realIssuer() {
-        return KEYCLOAK.getAuthServerUrl() + "realms/insurance-ai-test";
+        // The library's own dedicated accessor, not manual string concatenation on
+        // getAuthServerUrl() - that first attempt produced a malformed URL (missing separator
+        // between the authority and path), since getAuthServerUrl() does not end in a trailing
+        // slash the way it was assumed to.
+        return KEYCLOAK.getIssuerUrl("insurance-ai-test");
     }
 
     private String jwkSetUri() {
@@ -82,13 +87,19 @@ class KeycloakJwtValidationTest {
         return decoder;
     }
 
+    /**
+     * Client Credentials grant (service account), not password grant - deliberately avoids the
+     * brief's "no usar password grant salvo justificacion estrictamente necesaria" and, as a
+     * side effect, sidesteps Keycloak's per-user required-actions machinery entirely (a service
+     * account is not a user session at all), which is all this test actually needs: a genuinely
+     * signed token from a real token endpoint, to validate signature/issuer trust - not a real
+     * user login flow, which is already covered by the frontend's own OIDC integration (FASE 18).
+     */
     private String obtainRealAccessToken() {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("grant_type", "password");
+        form.add("grant_type", "client_credentials");
         form.add("client_id", "test-client");
         form.add("client_secret", "test-client-secret");
-        form.add("username", "test.user");
-        form.add("password", "test-password");
 
         RestClient restClient = RestClient.create();
         Map<?, ?> response = restClient.post()
@@ -108,9 +119,9 @@ class KeycloakJwtValidationTest {
 
         Jwt decoded = assertDoesNotThrow(() -> decoder.decode(realToken));
 
-        assertTrue(decoded.getClaimAsStringList("realm_access") != null
-                || decoded.getClaimAsMap("realm_access").get("roles") != null,
-                "the real token must carry the realm_access.roles claim JwtAuthoritiesConverter reads");
+        assertEquals(realIssuer(), decoded.getIssuer().toString(), "the real token's iss claim must be the realm's own issuer URL");
+        assertTrue(decoded.getSubject() != null && !decoded.getSubject().isBlank(),
+                "the real token must carry a subject claim identifying the client's service account");
     }
 
     @Test

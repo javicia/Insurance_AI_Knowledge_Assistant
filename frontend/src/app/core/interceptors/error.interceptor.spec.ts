@@ -1,8 +1,11 @@
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { vi } from 'vitest';
 
 import { errorInterceptor } from './error.interceptor';
+import { AuthService } from '../auth/auth.service';
+import { authServiceStub } from '../auth/testing/auth-service-stub';
 import { TraceContextService } from '../services/trace-context.service';
 import type { ApiError } from '../models/api-error.model';
 
@@ -13,7 +16,11 @@ describe('errorInterceptor', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(withInterceptors([errorInterceptor])), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(withInterceptors([errorInterceptor])),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: authServiceStub() },
+      ],
     });
     http = TestBed.inject(HttpClient);
     httpMock = TestBed.inject(HttpTestingController);
@@ -72,5 +79,51 @@ describe('errorInterceptor', () => {
 
     expect(error?.message).not.toContain('Exception');
     expect(error?.message).not.toContain('at com.rag');
+  });
+
+  it('re-authenticates (redirects to login) on a 401 for a previously-authenticated session', () => {
+    const login = vi.fn();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([errorInterceptor])),
+        provideHttpClientTesting(),
+        {
+          provide: AuthService,
+          useValue: authServiceStub({ isAuthenticated: (() => true) as unknown as AuthService['isAuthenticated'], login }),
+        },
+      ],
+    });
+    const localHttp = TestBed.inject(HttpClient);
+    const localHttpMock = TestBed.inject(HttpTestingController);
+
+    localHttp.get('/api/chat').subscribe({ error: () => {} });
+    localHttpMock.expectOne('/api/chat').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(login).toHaveBeenCalledTimes(1);
+    localHttpMock.verify();
+  });
+
+  it('does not attempt to re-authenticate a 401 for an already-anonymous session', () => {
+    const login = vi.fn();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([errorInterceptor])),
+        provideHttpClientTesting(),
+        {
+          provide: AuthService,
+          useValue: authServiceStub({ isAuthenticated: (() => false) as unknown as AuthService['isAuthenticated'], login }),
+        },
+      ],
+    });
+    const localHttp = TestBed.inject(HttpClient);
+    const localHttpMock = TestBed.inject(HttpTestingController);
+
+    localHttp.get('/api/chat').subscribe({ error: () => {} });
+    localHttpMock.expectOne('/api/chat').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(login).not.toHaveBeenCalled();
+    localHttpMock.verify();
   });
 });

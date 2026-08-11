@@ -6,6 +6,8 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { AssistantPage } from './assistant-page';
 import { errorInterceptor } from '../../../../core/interceptors/error.interceptor';
 import type { RagAnswer } from '../../../../core/models/chat.model';
+import { AuthService } from '../../../../core/auth/auth.service';
+import { authServiceStub } from '../../../../core/auth/testing/auth-service-stub';
 
 describe('AssistantPage', () => {
   let fixture: ComponentFixture<AssistantPage>;
@@ -18,6 +20,7 @@ describe('AssistantPage', () => {
         provideHttpClient(withInterceptors([errorInterceptor])),
         provideHttpClientTesting(),
         provideNoopAnimations(),
+        { provide: AuthService, useValue: authServiceStub() },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(AssistantPage);

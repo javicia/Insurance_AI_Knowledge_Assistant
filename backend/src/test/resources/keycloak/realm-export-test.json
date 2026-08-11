@@ -15,17 +15,9 @@
       "publicClient": false,
       "protocol": "openid-connect",
       "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": true,
-      "serviceAccountsEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
       "secret": "test-client-secret"
-    }
-  ],
-  "users": [
-    {
-      "username": "test.user",
-      "enabled": true,
-      "credentials": [ { "type": "password", "value": "test-password", "temporary": false } ],
-      "realmRoles": [ "AI_USER" ]
     }
   ]
 }

@@ -67,6 +67,13 @@
   &__status--down {
     color: var(--app-color-danger);
   }
+
+  &__user-menu-identity {
+    padding: var(--app-space-2) var(--app-space-4);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--app-color-text-secondary);
+  }
 }
 
 @media (max-width: 900px) {

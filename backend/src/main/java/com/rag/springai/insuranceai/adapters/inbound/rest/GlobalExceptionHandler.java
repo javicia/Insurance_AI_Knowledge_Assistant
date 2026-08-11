@@ -10,7 +10,9 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -55,6 +57,30 @@ class GlobalExceptionHandler {
         log.warn("Method not supported: {}", exception.getMessage());
         return respond(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", "The requested method is not supported "
                 + "for this resource.");
+    }
+
+    /**
+     * A malformed or incomplete JSON body (e.g. missing a required primitive field, invalid
+     * syntax) throws this exception during request deserialization, before any
+     * {@code @RestController} method body runs - found via the FASE 23 authorization-matrix E2E
+     * verification (an intentionally minimal {@code {}} body against
+     * {@code POST /api/governance/ai-systems} returned {@code 500} instead of {@code 400}).
+     * Without this handler it falls through to {@link #handleUnexpectedException}, which is wrong
+     * both semantically (this is a client error, not a server fault) and for API robustness
+     * (brief FASE 31's concern, fixed here on discovery rather than deferred).
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(HttpMessageNotReadableException exception) {
+        log.warn("Malformed request body: {}", exception.getMessage());
+        return respond(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST_BODY", "The request body could not be parsed.");
+    }
+
+    /** Same client-error reasoning as {@link #handleHttpMessageNotReadableException} - a
+     *  bean-validation failure ({@code @Valid}) is a {@code 400}, not the generic {@code 500}. */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    ResponseEntity<ErrorResponse> handleMethodArgumentNotValidException(MethodArgumentNotValidException exception) {
+        log.warn("Request validation failed: {}", exception.getMessage());
+        return respond(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "The request did not pass validation.");
     }
 
     @ExceptionHandler(DomainException.class)

@@ -4,33 +4,80 @@ server:
 spring:
   application:
     name: insurance-ai-gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Same internal/external URL split as the backend (FASE 17) - see
+          # docs/security/IAM_ARCHITECTURE.md section 2 and GatewaySecurityConfiguration#jwtDecoder.
+          jwk-set-uri: ${INSURANCE_AI_OIDC_JWK_SET_URI:http://localhost:8180/realms/insurance-ai/protocol/openid-connect/certs}
   cloud:
     gateway:
       server:
         webflux:
-          # Explicit routes only (brief FASE 19 section 6) - the gateway knows route paths and
-          # technical policy, never Document/RAG/Governance/Audit domain concepts.
+          httpclient:
+            connect-timeout: 5000
+            response-timeout: 30s
+          # Explicit routes only (brief FASE 19 section 6) - the gateway knows route paths,
+          # allowed methods, and technical policy, never Document/RAG/Governance/Audit domain
+          # concepts. Every route also caps request size (RequestSize filter) - a deliberately
+          # generous 15MB accommodates the documents route's PDF uploads; every other route's
+          # JSON bodies are tiny by comparison, but sharing one limit across all five routes is
+          # simpler than tuning five different values with no evidence any of them need to differ.
+          #
+          # NOTE: this block MUST live under `spring.cloud.gateway...` - Spring Cloud Gateway's
+          # autoconfiguration only binds routes from that exact property path. An earlier revision
+          # nested this entire block under a custom `insurance-ai:` key instead, which is a
+          # perfectly valid YAML/property tree but not one Spring Cloud Gateway reads - the
+          # RouteLocator silently ended up with zero routes, and every single request (including
+          # authenticated, syntactically valid ones) returned 404 with no error logged anywhere.
+          # Caught by manually curling every route end-to-end through the real gateway container.
           routes:
             - id: chat
               uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
               predicates:
                 - Path=/api/chat/**
+                - Method=POST
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
             - id: documents
               uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
               predicates:
                 - Path=/api/documents/**
+                - Method=GET,POST
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
             - id: governance
               uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
               predicates:
                 - Path=/api/governance/**
+                - Method=GET,POST
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
             - id: audit
               uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
               predicates:
                 - Path=/api/audit/**
+                - Method=GET
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
             - id: evaluation
               uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
               predicates:
                 - Path=/api/evaluation/**
+                - Method=GET,POST
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
           globalcors:
             cors-configurations:
               "[/**]":
@@ -38,6 +85,11 @@ spring:
                 allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
                 allowedHeaders: "*"
                 allowCredentials: true
+
+insurance-ai:
+  security:
+    oauth2:
+      issuer: ${INSURANCE_AI_OIDC_ISSUER:http://localhost:8180/realms/insurance-ai}
 
 management:
   endpoints:

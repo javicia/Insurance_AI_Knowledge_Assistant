@@ -33,10 +33,16 @@ services:
       - insurance-ai-net
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
-      retries: 15
-      start_period: 45s
+      retries: 5
+      # Empirically measured, not guessed: Keycloak's own Quarkus "build" phase (triggered by
+      # --import-realm on first start) was observed taking up to ~10.5 minutes on this project's
+      # development machine (Windows/Docker Desktop/WSL2, slow small-file I/O during that phase -
+      # see docs/adr/ADR-015-IAM-OAUTH2-OIDC.md and KeycloakJwtValidationTest's own Testcontainers
+      # startup timeout, measured the same way). 12 minutes gives real margin above that
+      # measurement, not an arbitrary round number.
+      start_period: 720s
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -62,7 +68,9 @@ services:
       start_period: 10s
 
   kafka:
-    image: apache/kafka:latest
+    # FASE 34 (container hardening): pinned, not :latest - reproducible builds, no surprise
+    # upgrades on a fresh `docker compose pull`.
+    image: apache/kafka:4.3.1
     container_name: insurance-ai-kafka
     restart: unless-stopped
     environment:
@@ -98,7 +106,8 @@ services:
       start_period: 30s
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    # FASE 34: pinned, not :latest.
+    image: provectuslabs/kafka-ui:v0.7.2
     container_name: insurance-ai-kafka-ui
     restart: unless-stopped
     environment:
@@ -137,6 +146,13 @@ services:
       INSURANCE_AI_PROVIDER: ${INSURANCE_AI_PROVIDER:-fake}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-not-configured}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-not-configured}
+      # FASE 17 (IAM): internal Docker network address for fetching signing keys - deliberately
+      # NOT the same value as INSURANCE_AI_OIDC_ISSUER, see
+      # InsuranceAiProperties.Security.OAuth2's Javadoc for why the two must differ here.
+      INSURANCE_AI_OIDC_JWK_SET_URI: http://keycloak:8080/realms/insurance-ai/protocol/openid-connect/certs
+      # The browser-facing address - identical to what Keycloak actually prints into every
+      # token's iss claim, since that reflects whatever URL obtained the token in the first place.
+      INSURANCE_AI_OIDC_ISSUER: ${INSURANCE_AI_OIDC_ISSUER:-http://localhost:8180/realms/insurance-ai}
     ports:
       # Published for direct developer access (Swagger UI, curl) - real network segmentation
       # (removing this and routing every external call through the gateway/WAF only) is FASE 40's
@@ -149,12 +165,21 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      keycloak:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 90s
+    # FASE 34 (container hardening): a JVM with no memory ceiling can consume the whole host -
+    # respected by `docker compose up` (Compose Specification, no swarm required).
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1536M
 
   gateway:
     build:
@@ -168,6 +193,10 @@ services:
       # Docker network address - CORS is enforced against what the browser itself sends as
       # `Origin`).
       INSURANCE_AI_ALLOWED_ORIGIN: ${INSURANCE_AI_ALLOWED_ORIGIN:-http://localhost:8083}
+      # FASE 19: the gateway independently validates JWTs too (defense in depth) - same internal/
+      # external URL split as the backend, see docs/security/IAM_ARCHITECTURE.md section 2.
+      INSURANCE_AI_OIDC_JWK_SET_URI: http://keycloak:8080/realms/insurance-ai/protocol/openid-connect/certs
+      INSURANCE_AI_OIDC_ISSUER: ${INSURANCE_AI_OIDC_ISSUER:-http://localhost:8180/realms/insurance-ai}
     ports:
       - "8082:8082"
     networks:
@@ -181,6 +210,11 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
 
   frontend:
     build:
@@ -189,14 +223,56 @@ services:
     container_name: insurance-ai-frontend
     restart: unless-stopped
     environment:
-      # The one thing the frontend is allowed to know (brief section 47) - the gateway's
-      # browser-reachable URL, injected into env.js at container startup. Never a database URL,
-      # Kafka URL, LLM credential, or internal service hostname.
-      PUBLIC_API_BASE_URL: ${INSURANCE_AI_PUBLIC_API_BASE_URL:-http://localhost:8082}
+      # FASE 20: the browser now reaches the API through the WAF (the one public edge), not the
+      # gateway directly - see waf/ and docs/adr/ADR-016-WAF-EDGE.md. Still overridable for a
+      # topology that deliberately bypasses the WAF during development.
+      PUBLIC_API_BASE_URL: ${INSURANCE_AI_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      PUBLIC_OIDC_ISSUER: ${INSURANCE_AI_OIDC_ISSUER:-http://localhost:8180/realms/insurance-ai}
+      PUBLIC_OIDC_CLIENT_ID: insurance-ai-frontend
     ports:
+      # Published for direct developer access - real browser traffic goes through the WAF
+      # (port 8000) once it is up, per the edge topology below.
       - "8083:8080"
     networks:
       - insurance-ai-net
     depends_on:
       gateway:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  # FASE 20/21: the single browser-facing edge (real ModSecurity + OWASP CRS, not a hand-rolled
+  # filter) - see waf/Dockerfile and docs/adr/ADR-016-WAF-EDGE.md for why it routes by path to
+  # both the frontend and the gateway rather than only sitting in front of the gateway.
+  waf:
+    build:
+      context: ./waf
+      dockerfile: Dockerfile
+    container_name: insurance-ai-waf
+    restart: unless-stopped
+    environment:
+      API_BACKEND: http://gateway:8082
+      FRONTEND_BACKEND: http://frontend:8080
+    ports:
+      - "8000:8080"
+    networks:
+      - insurance-ai-net
+    depends_on:
+      gateway:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M

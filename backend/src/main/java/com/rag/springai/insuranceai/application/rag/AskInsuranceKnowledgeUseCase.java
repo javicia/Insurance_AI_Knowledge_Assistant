@@ -17,13 +17,18 @@ import com.rag.springai.insuranceai.domain.rag.LlmCompletion;
 import com.rag.springai.insuranceai.domain.rag.LlmPrompt;
 import com.rag.springai.insuranceai.domain.rag.RetrievalOutcome;
 import com.rag.springai.insuranceai.domain.security.PromptInjectionAssessment;
+import com.rag.springai.insuranceai.domain.security.SecurityEvent;
+import com.rag.springai.insuranceai.domain.security.SecurityEventOutcome;
+import com.rag.springai.insuranceai.domain.security.SecurityEventType;
 import com.rag.springai.insuranceai.ports.outbound.DocumentRepository;
 import com.rag.springai.insuranceai.ports.outbound.LlmProvider;
 import com.rag.springai.insuranceai.ports.outbound.PromptRepository;
+import com.rag.springai.insuranceai.ports.outbound.SecurityEventPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -99,11 +104,12 @@ public final class AskInsuranceKnowledgeUseCase {
     private final PromptRepository promptRepository;
     private final AuditService auditService;
     private final MeterRegistry meterRegistry;
+    private final SecurityEventPort securityEventLogger;
 
     public AskInsuranceKnowledgeUseCase(HybridRetrievalService hybridRetrievalService, LlmProvider llmProvider,
             DocumentRepository documentRepository, InsuranceAiProperties properties,
             InputGuardService inputGuardService, PromptRepository promptRepository, AuditService auditService,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry, SecurityEventPort securityEventLogger) {
         this.hybridRetrievalService = Objects.requireNonNull(hybridRetrievalService,
                 "hybridRetrievalService must not be null");
         this.llmProvider = Objects.requireNonNull(llmProvider, "llmProvider must not be null");
@@ -113,6 +119,7 @@ public final class AskInsuranceKnowledgeUseCase {
         this.promptRepository = Objects.requireNonNull(promptRepository, "promptRepository must not be null");
         this.auditService = Objects.requireNonNull(auditService, "auditService must not be null");
         this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry must not be null");
+        this.securityEventLogger = Objects.requireNonNull(securityEventLogger, "securityEventLogger must not be null");
     }
 
     public RagAnswer ask(AskInsuranceKnowledgeCommand command) {
@@ -125,6 +132,9 @@ public final class AskInsuranceKnowledgeUseCase {
         if (inputAssessment.blocked()) {
             log.warn("Blocked question due to prompt injection guardrail: patterns={}",
                     inputAssessment.promptInjection().matchedPatterns());
+            securityEventLogger.log(SecurityEvent.now(SecurityEventType.PROMPT_INJECTION_BLOCKED,
+                    SecurityEventOutcome.BLOCKED, traceId, currentPrincipalId(), null, null, null,
+                    String.join(",", inputAssessment.promptInjection().matchedPatterns())));
             recordAudit(traceId, provider, null, null, null, 0, 0, 0, null, true,
                     inputAssessment.pii().detected(), false, startNanos, AuditOutcome.BLOCKED_BY_GUARDRAIL, null);
             return RagAnswer.blocked(traceId);
@@ -132,6 +142,8 @@ public final class AskInsuranceKnowledgeUseCase {
         if (inputAssessment.pii().detected()) {
             log.info("Question contains detected PII (redacted): {}",
                     inputGuardService.sanitizeForLogging(command.question()));
+            securityEventLogger.log(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
+                    traceId, currentPrincipalId(), null, null, null, "question"));
         }
 
         HybridRetrievalOutcome outcome;
@@ -193,6 +205,8 @@ public final class AskInsuranceKnowledgeUseCase {
         boolean piiInAnswer = inputGuardService.scanForPii(completion.text()).detected();
         if (piiInAnswer) {
             log.warn("Generated answer contains detected PII - review data minimization in source documents");
+            securityEventLogger.log(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
+                    traceId, currentPrincipalId(), null, null, null, "answer"));
         }
 
         recordAudit(traceId, provider, activePrompt.promptKey(), activePrompt.version(),
@@ -215,6 +229,11 @@ public final class AskInsuranceKnowledgeUseCase {
                 promptVersion, retrievalOutcome, semanticCandidateCount, lexicalCandidateCount, finalCandidateCount,
                 groundingStatus, promptInjectionDetected, piiDetectedInQuestion, piiDetectedInAnswer, latencyMs,
                 outcome, errorClassification);
+    }
+
+    private String currentPrincipalId() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : null;
     }
 
     private void warnIfRetrievedContentContainsInjectionAttempts(List<HybridRetrievalResult> candidates) {

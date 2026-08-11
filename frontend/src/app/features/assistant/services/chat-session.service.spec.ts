@@ -7,6 +7,8 @@ import type { RagAnswer } from '../../../core/models/chat.model';
 import type { ErrorResponse } from '../../../core/models/api-error.model';
 import { errorInterceptor } from '../../../core/interceptors/error.interceptor';
 import { provideHttpClient as provideHttp, withInterceptors } from '@angular/common/http';
+import { AuthService } from '../../../core/auth/auth.service';
+import { authServiceStub } from '../../../core/auth/testing/auth-service-stub';
 
 function groundedAnswer(overrides: Partial<RagAnswer> = {}): RagAnswer {
   return {
@@ -28,7 +30,11 @@ describe('ChatSessionService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttp(withInterceptors([errorInterceptor])), provideHttpClientTesting()],
+      providers: [
+        provideHttp(withInterceptors([errorInterceptor])),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: authServiceStub() },
+      ],
     });
     service = TestBed.inject(ChatSessionService);
     httpMock = TestBed.inject(HttpTestingController);

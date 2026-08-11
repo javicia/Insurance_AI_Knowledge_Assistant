@@ -63,6 +63,24 @@ class GlobalExceptionHandlerTest {
         void postOnlyEndpoint() {
             // exists only so MockMvc's real HandlerMapping rejects a GET to it below
         }
+
+        @org.springframework.web.bind.annotation.PostMapping("/malformed-body-endpoint")
+        void malformedBodyEndpoint(
+                @org.springframework.web.bind.annotation.RequestBody StubRequestBody body) {
+            // exists only so a body Jackson cannot deserialize throws HttpMessageNotReadableException
+        }
+
+        @org.springframework.web.bind.annotation.PostMapping("/validated-body-endpoint")
+        void validatedBodyEndpoint(
+                @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody StubValidatedBody body) {
+            // exists only so a body failing bean validation throws MethodArgumentNotValidException
+        }
+    }
+
+    record StubRequestBody(boolean requiredFlag) {
+    }
+
+    record StubValidatedBody(@jakarta.validation.constraints.NotNull String requiredField) {
     }
 
     static class StubDomainException extends DomainException {
@@ -147,6 +165,32 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(405, response.getStatus());
         assertTrue(response.getContentAsString().contains("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
+    void shouldMapHttpMessageNotReadableExceptionTo400NotTheGeneric500() throws Exception {
+        MockHttpServletResponse response = mockMvc
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/malformed-body-endpoint")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        assertTrue(response.getContentAsString().contains("MALFORMED_REQUEST_BODY"));
+    }
+
+    @Test
+    void shouldMapMethodArgumentNotValidExceptionTo400NotTheGeneric500() throws Exception {
+        MockHttpServletResponse response = mockMvc
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/validated-body-endpoint")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        assertTrue(response.getContentAsString().contains("VALIDATION_FAILED"));
     }
 
     @Test

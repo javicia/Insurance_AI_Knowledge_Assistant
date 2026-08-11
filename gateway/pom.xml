@@ -47,6 +47,24 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <dependency>
+            <!-- FASE 19: the gateway independently validates JWTs too (defense in depth - a
+                 request the gateway itself already knows is unauthenticated/invalid never even
+                 reaches the backend), reusing the same reactive resource-server auto-configuration
+                 the WebFlux stack already on the classpath (spring-cloud-starter-gateway-server-
+                 webflux) selects automatically. See GatewaySecurityConfiguration. -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
+            <!-- FASE 21: real per-key token-bucket rate limiting (RateLimitingFilter), not a
+                 naive shared counter. In-memory for this single-gateway-instance PoC - see that
+                 class's Javadoc for the documented migration path to a distributed backend
+                 (bucket4j-redis) if the gateway is ever scaled horizontally. -->
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>8.10.1</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
@@ -54,6 +72,11 @@
         <dependency>
             <groupId>io.projectreactor</groupId>
             <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

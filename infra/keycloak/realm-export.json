@@ -45,6 +45,20 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "secret": "gateway-dev-secret-never-used-in-production"
+    },
+    {
+      "clientId": "insurance-ai-e2e-test",
+      "name": "E2E/CLI test client - password grant deliberately scoped to this client only",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "secret": "e2e-test-dev-secret-never-used-in-production",
+      "attributes": {
+        "insurance-ai.purpose": "Password grant is used here, and only here, for scripted/curl-based end-to-end verification against real seeded users (alice/bob/carol/dave) - the real browser SPA client (insurance-ai-frontend) never has direct access grants enabled and only ever uses Authorization Code Flow with PKCE, matching brief FASE 18's explicit requirement."
+      }
     }
   ],
   "users": [
@@ -52,6 +66,9 @@
       "username": "alice.user",
       "enabled": true,
       "emailVerified": true,
+      "requiredActions": [],
+      "firstName": "Alice",
+      "lastName": "User",
       "email": "alice.user@example-insurer.test",
       "credentials": [ { "type": "password", "value": "alice-password", "temporary": false } ],
       "realmRoles": [ "AI_USER" ]
@@ -60,6 +77,9 @@
       "username": "bob.governance",
       "enabled": true,
       "emailVerified": true,
+      "requiredActions": [],
+      "firstName": "Bob",
+      "lastName": "Governance",
       "email": "bob.governance@example-insurer.test",
       "credentials": [ { "type": "password", "value": "bob-password", "temporary": false } ],
       "realmRoles": [ "AI_GOVERNANCE_ADMIN" ]
@@ -68,6 +88,9 @@
       "username": "carol.auditor",
       "enabled": true,
       "emailVerified": true,
+      "requiredActions": [],
+      "firstName": "Carol",
+      "lastName": "Auditor",
       "email": "carol.auditor@example-insurer.test",
       "credentials": [ { "type": "password", "value": "carol-password", "temporary": false } ],
       "realmRoles": [ "AI_AUDITOR" ]
@@ -76,6 +99,9 @@
       "username": "dave.evaluator",
       "enabled": true,
       "emailVerified": true,
+      "requiredActions": [],
+      "firstName": "Dave",
+      "lastName": "Evaluator",
       "email": "dave.evaluator@example-insurer.test",
       "credentials": [ { "type": "password", "value": "dave-password", "temporary": false } ],
       "realmRoles": [ "AI_EVALUATION_ADMIN" ]
