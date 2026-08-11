@@ -1,6 +1,7 @@
 package com.rag.springai.insuranceai.adapters.outbound.security;
 
 import com.rag.springai.insuranceai.domain.security.PiiAssessment;
+import com.rag.springai.insuranceai.domain.security.PiiMatch;
 import com.rag.springai.insuranceai.domain.security.PiiType;
 import org.junit.jupiter.api.Test;
 
@@ -56,5 +57,66 @@ class RuleBasedPiiGuardTest {
     @Test
     void textWithoutPiiIsClean() {
         assertFalse(guard.scan("What does my policy cover for water damage?").detected());
+    }
+
+    // --- FASE 24: CREDIT_CARD (Luhn-validated), API_KEY, JWT, CREDENTIAL ---
+
+    @Test
+    void detectsALuhnValidCreditCardNumber() {
+        // 4111111111111111 is the well-known publicly-documented Visa test number (Luhn-valid,
+        // never a real issued card) - safe to hardcode in a test.
+        PiiAssessment assessment = guard.scan("Card number: 4111111111111111 expires 12/29.");
+
+        assertTrue(assessment.detected());
+        assertTrue(assessment.matches().stream().anyMatch(m -> m.type() == PiiType.CREDIT_CARD));
+    }
+
+    @Test
+    void doesNotFlagADigitRunThatFailsTheLuhnChecksum() {
+        // Same length as the test card above, last digit changed so the checksum no longer holds
+        // - proves the detector is not just "any 13-19 digit run", cutting false positives on
+        // arbitrary long numbers (invoice/policy numbers, phone extensions).
+        PiiAssessment assessment = guard.scan("Reference number: 4111111111111112 for this ticket.");
+
+        assertFalse(assessment.matches().stream().anyMatch(m -> m.type() == PiiType.CREDIT_CARD));
+    }
+
+    @Test
+    void detectsCreditCardNumberWithSpacesOrDashes() {
+        assertTrue(guard.scan("4111 1111 1111 1111").detected());
+        assertTrue(guard.scan("4111-1111-1111-1111").detected());
+    }
+
+    @Test
+    void detectsCommonApiKeyShapes() {
+        assertEquals(PiiType.API_KEY, guard.scan("AWS key: AKIAIOSFODNN7EXAMPLE").matches().get(0).type());
+        assertEquals(PiiType.API_KEY,
+                guard.scan("token ghp_abcdefghijklmnopqrstuvwxyz0123456789").matches().get(0).type());
+        assertEquals(PiiType.API_KEY,
+                guard.scan("key sk-abcdefghijklmnopqrstuvwxyz0123456789").matches().get(0).type());
+        assertEquals(PiiType.API_KEY, guard.scan("slack token xoxb-1234567890-abcdefghij").matches().get(0).type());
+    }
+
+    @Test
+    void detectsAJwtShapedToken() {
+        String jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+
+        PiiAssessment assessment = guard.scan("Authorization: Bearer " + jwt);
+
+        assertTrue(assessment.matches().stream().anyMatch(m -> m.type() == PiiType.JWT));
+    }
+
+    @Test
+    void detectsInlinePasswordAndSecretAssignments() {
+        assertTrue(guard.scan("password: hunter2").detected());
+        assertTrue(guard.scan("secret=abc123XYZ").detected());
+        assertTrue(guard.scan("api_key: sk-not-a-real-key").detected());
+    }
+
+    @Test
+    void secretTypesAreMaskedEntirelyNotJustPartially() {
+        PiiMatch match = guard.scan("password: hunter2").matches().get(0);
+
+        assertFalse(match.maskedValue().contains("hunter2"));
     }
 }

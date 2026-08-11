@@ -49,12 +49,22 @@ class KeycloakJwtValidationTest {
     // development machine: a manual `docker run` of the identical image/command was observed
     // still in Keycloak's own Quarkus "build" phase (a real, live java process, gradually
     // increasing disk I/O, never crashed) after 7+ minutes, consistent with known slow
-    // small-file I/O on Docker Desktop's Windows/WSL2 backend. 10 minutes is set from that
-    // direct observation, not an arbitrary round number.
+    // small-file I/O on Docker Desktop's Windows/WSL2 backend.
+    //
+    // FASE 23 re-measurement: the previous 10-minute value, run in isolation (no other Maven/
+    // Testcontainers/Docker build process active) on this same machine, was itself exceeded - a
+    // real log line proved the Quarkus augmentation phase alone took 594151ms (~9.9 min:
+    // "Quarkus augmentation completed in 594151ms"), and the container was still running
+    // Liquibase schema initialization when the 10-minute wait strategy gave up, killing the
+    // log-follow connection ("Unexpected end of file from server") - total observed time to that
+    // point: 685.8s (~11.4 min), i.e. genuinely past the old budget, not a fluke near the
+    // boundary. 15 minutes restores real margin above this newer, larger measurement; if this
+    // machine's Quarkus augmentation time keeps drifting upward across sessions, that drift - not
+    // this timeout - is the thing to keep investigating (see docs/testing/TESTCONTAINERS.md).
     private static final KeycloakContainer KEYCLOAK = new KeycloakContainer("quay.io/keycloak/keycloak:26.0")
             .withCopyFileToContainer(MountableFile.forClasspathResource("keycloak/realm-export-test.json"),
                     "/opt/keycloak/data/import/realm-export-test.json")
-            .withStartupTimeout(Duration.ofMinutes(10));
+            .withStartupTimeout(Duration.ofMinutes(15));
 
     @BeforeAll
     static void startKeycloak() {

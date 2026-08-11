@@ -132,7 +132,7 @@ public final class AskInsuranceKnowledgeUseCase {
         if (inputAssessment.blocked()) {
             log.warn("Blocked question due to prompt injection guardrail: patterns={}",
                     inputAssessment.promptInjection().matchedPatterns());
-            securityEventLogger.log(SecurityEvent.now(SecurityEventType.PROMPT_INJECTION_BLOCKED,
+            logSecurityEventSafely(SecurityEvent.now(SecurityEventType.PROMPT_INJECTION_BLOCKED,
                     SecurityEventOutcome.BLOCKED, traceId, currentPrincipalId(), null, null, null,
                     String.join(",", inputAssessment.promptInjection().matchedPatterns())));
             recordAudit(traceId, provider, null, null, null, 0, 0, 0, null, true,
@@ -142,7 +142,7 @@ public final class AskInsuranceKnowledgeUseCase {
         if (inputAssessment.pii().detected()) {
             log.info("Question contains detected PII (redacted): {}",
                     inputGuardService.sanitizeForLogging(command.question()));
-            securityEventLogger.log(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
+            logSecurityEventSafely(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
                     traceId, currentPrincipalId(), null, null, null, "question"));
         }
 
@@ -205,7 +205,7 @@ public final class AskInsuranceKnowledgeUseCase {
         boolean piiInAnswer = inputGuardService.scanForPii(completion.text()).detected();
         if (piiInAnswer) {
             log.warn("Generated answer contains detected PII - review data minimization in source documents");
-            securityEventLogger.log(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
+            logSecurityEventSafely(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
                     traceId, currentPrincipalId(), null, null, null, "answer"));
         }
 
@@ -234,6 +234,23 @@ public final class AskInsuranceKnowledgeUseCase {
     private String currentPrincipalId() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null ? authentication.getName() : null;
+    }
+
+    /**
+     * Security event logging is best-effort observability, never a precondition for answering a
+     * real question - a legitimate RAG request must complete even if the event sink itself is
+     * broken. Any exception from {@link SecurityEventPort#log} is caught here and demoted to a
+     * plain {@code WARN} on this class's own logger, never the {@code "security-events"} logger -
+     * swallowing it there too would risk masking a real sink failure as a normal security event.
+     */
+    private void logSecurityEventSafely(SecurityEvent event) {
+        try {
+            securityEventLogger.log(event);
+        }
+        catch (RuntimeException e) {
+            log.warn("Failed to emit security event of type {} - continuing, since security event logging must "
+                    + "never break the request it describes", event.type(), e);
+        }
     }
 
     private void warnIfRetrievedContentContainsInjectionAttempts(List<HybridRetrievalResult> candidates) {

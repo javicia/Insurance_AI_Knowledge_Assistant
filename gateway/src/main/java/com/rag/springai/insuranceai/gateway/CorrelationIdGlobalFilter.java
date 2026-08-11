@@ -15,9 +15,16 @@ import reactor.core.publisher.Mono;
  * one, so correlation covers the gateway hop too, not just backend-internal processing - the
  * backend's own {@code TraceIdFilter} (unchanged) reuses whatever value it receives rather than
  * generating a second, disconnected id, so a single trace id covers the client's full journey.
- * Superseded in FASE 22 by full W3C {@code traceparent} propagation (see
- * {@code docs/observability/DISTRIBUTED_TRACING.md}) - this header is kept for backward
- * compatibility with the existing MDC-based backend logging correlation.
+ *
+ * <p><b>This is request correlation, not distributed tracing</b>: a single opaque ID threaded
+ * through a custom header and SLF4J's MDC, not W3C {@code traceparent}/spans/OpenTelemetry. No
+ * OpenTelemetry SDK, exporter, or collector exists anywhere in this codebase (verified: no
+ * {@code micrometer-tracing}/{@code opentelemetry-*} dependency in either module's {@code
+ * pom.xml}, no tracing config in either {@code application.yaml}) - see {@code
+ * docs/observability/OBSERVABILITY.md}'s explicit Production Gap Analysis entry. A prior version
+ * of this Javadoc claimed this was "superseded by full W3C traceparent propagation" citing a
+ * {@code docs/observability/DISTRIBUTED_TRACING.md} that was never actually written - that claim
+ * was false and has been removed.
  */
 @Component
 public class CorrelationIdGlobalFilter implements WebFilter, Ordered {

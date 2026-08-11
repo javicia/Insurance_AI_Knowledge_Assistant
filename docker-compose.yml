@@ -40,9 +40,15 @@ services:
       # --import-realm on first start) was observed taking up to ~10.5 minutes on this project's
       # development machine (Windows/Docker Desktop/WSL2, slow small-file I/O during that phase -
       # see docs/adr/ADR-015-IAM-OAUTH2-OIDC.md and KeycloakJwtValidationTest's own Testcontainers
-      # startup timeout, measured the same way). 12 minutes gives real margin above that
-      # measurement, not an arbitrary round number.
-      start_period: 720s
+      # startup timeout, measured the same way).
+      #
+      # FASE 23 re-measurement (KeycloakJwtValidationTest, run in isolation): a real, eventually-
+      # successful startup on this same machine took 685.8s (~11.4 min) total, with the Quarkus
+      # augmentation phase alone measured at 594151ms via Keycloak's own log line - past the
+      # previous 12-minute margin's safety buffer. 15 minutes restores real margin above this
+      # newer, larger measurement (see KeycloakJwtValidationTest's own Javadoc for the identical
+      # evidence).
+      start_period: 900s
 
   postgres:
     image: pgvector/pgvector:pg16

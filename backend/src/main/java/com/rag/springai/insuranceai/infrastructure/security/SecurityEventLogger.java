@@ -30,9 +30,25 @@ public class SecurityEventLogger implements SecurityEventPort {
      *  sink (file, syslog, a future collector) without touching every other class's logger. */
     private static final Logger log = LoggerFactory.getLogger("security-events");
 
+    /** Deliberately a *different* logger than {@link #log} - used only to report a failure of
+     *  the security-event sink itself, so that failure is never mistaken for a normal security
+     *  event by anything consuming the {@code security-events} stream downstream. */
+    private static final Logger failureLog = LoggerFactory.getLogger(SecurityEventLogger.class);
+
     @Override
     public void log(SecurityEvent event) {
-        log.warn(toJson(event));
+        // This adapter's own contract is "never throws" - callers (SecurityErrorHandler,
+        // AuditController, AskInsuranceKnowledgeUseCase) also defensively wrap their call to this
+        // port, but that is defense-in-depth, not a reason to skip the same guarantee here: an
+        // event-logging failure must never be capable of turning a legitimate request into an
+        // unhandled 500 anywhere in the call chain.
+        try {
+            log.warn(toJson(event));
+        }
+        catch (RuntimeException e) {
+            failureLog.warn("Failed to emit security event of type {} - continuing, since security event "
+                    + "logging must never break the request it describes", event.type(), e);
+        }
     }
 
     /**

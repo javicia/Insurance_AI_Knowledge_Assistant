@@ -8,6 +8,8 @@ import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
 import io.github.bucket4j.Refill;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -39,6 +41,8 @@ import reactor.core.publisher.Mono;
 @Component
 public class RateLimitingFilter implements GlobalFilter, Ordered {
 
+    private static final Logger log = LoggerFactory.getLogger(RateLimitingFilter.class);
+
     /** Requests per minute, per authenticated user, per route family (brief FASE 20 example values). */
     private enum RouteLimit {
         CHAT("/api/chat", 60),
@@ -66,6 +70,11 @@ public class RateLimitingFilter implements GlobalFilter, Ordered {
     }
 
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final GatewaySecurityEventLogger securityEventLogger;
+
+    public RateLimitingFilter(GatewaySecurityEventLogger securityEventLogger) {
+        this.securityEventLogger = securityEventLogger;
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -112,6 +121,21 @@ public class RateLimitingFilter implements GlobalFilter, Ordered {
         response.getHeaders().add("X-RateLimit-Remaining", "0");
         response.getHeaders().add("Retry-After", String.valueOf(retryAfterSeconds));
         response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
+
+        String traceId = exchange.getRequest().getHeaders().getFirst(CorrelationIdGlobalFilter.TRACE_ID_HEADER);
+        // Best-effort: a broken event sink must never turn a legitimate 429 into an unhandled
+        // exception - see the backend's identical SecurityErrorHandler reasoning.
+        try {
+            securityEventLogger.log(GatewaySecurityEvent.now(GatewaySecurityEventType.RATE_LIMIT_EXCEEDED,
+                    traceId != null ? traceId : "unknown", subject, exchange.getRequest().getMethod().name(),
+                    exchange.getRequest().getPath().value(), HttpStatus.TOO_MANY_REQUESTS.value(),
+                    routeLimit.name()));
+        }
+        catch (RuntimeException e) {
+            log.warn("Failed to emit RATE_LIMIT_EXCEEDED security event - continuing, since security event "
+                    + "logging must never break the request it describes", e);
+        }
+
         return response.setComplete();
     }
 

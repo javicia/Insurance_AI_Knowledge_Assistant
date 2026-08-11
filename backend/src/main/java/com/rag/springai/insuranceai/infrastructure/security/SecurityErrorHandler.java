@@ -7,6 +7,7 @@ import com.rag.springai.insuranceai.domain.security.SecurityEvent;
 import com.rag.springai.insuranceai.domain.security.SecurityEventOutcome;
 import com.rag.springai.insuranceai.domain.security.SecurityEventType;
 import com.rag.springai.insuranceai.domain.shared.TraceId;
+import com.rag.springai.insuranceai.ports.outbound.SecurityEventPort;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -43,9 +44,9 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
 
     private static final Logger log = LoggerFactory.getLogger(SecurityErrorHandler.class);
 
-    private final SecurityEventLogger securityEventLogger;
+    private final SecurityEventPort securityEventLogger;
 
-    public SecurityErrorHandler(SecurityEventLogger securityEventLogger) {
+    public SecurityErrorHandler(SecurityEventPort securityEventLogger) {
         this.securityEventLogger = securityEventLogger;
     }
 
@@ -58,7 +59,7 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
         // reason is the exception's class name, a fixed/bounded category (e.g. "BadCredentialsException",
         // "InvalidBearerTokenException") - never exception.getMessage(), which can echo back
         // caller-supplied header/token content.
-        securityEventLogger.log(SecurityEvent.now(SecurityEventType.AUTHENTICATION_FAILURE,
+        logSecurityEventSafely(SecurityEvent.now(SecurityEventType.AUTHENTICATION_FAILURE,
                 SecurityEventOutcome.DENIED, traceId, null, request.getMethod(), request.getRequestURI(),
                 HttpStatus.UNAUTHORIZED.value(), exception.getClass().getSimpleName()));
         write(response, traceId, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED",
@@ -70,11 +71,30 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
             throws IOException {
         log.warn("Access denied for {} {}: {}", request.getMethod(), request.getRequestURI(), exception.getMessage());
         String traceId = currentTraceId();
-        securityEventLogger.log(SecurityEvent.now(SecurityEventType.AUTHORIZATION_DENIED,
+        logSecurityEventSafely(SecurityEvent.now(SecurityEventType.AUTHORIZATION_DENIED,
                 SecurityEventOutcome.DENIED, traceId, currentPrincipalId(), request.getMethod(),
                 request.getRequestURI(), HttpStatus.FORBIDDEN.value(), exception.getClass().getSimpleName()));
         write(response, traceId, HttpStatus.FORBIDDEN, "FORBIDDEN",
                 "The authenticated principal does not have the required authority for this resource.");
+    }
+
+    /**
+     * Security event logging is best-effort observability, never a precondition for answering a
+     * real 401/403 - a caller must always get the correct security response even if the event
+     * sink itself is broken. Any exception from {@link SecurityEventPort#log} (today's
+     * implementation shouldn't throw, but the port contract doesn't guarantee that for every
+     * future implementation) is caught here and demoted to a plain {@code WARN} on this class's
+     * own logger, never the {@code "security-events"} logger - swallowing it there too would risk
+     * masking a real sink failure as a normal security event.
+     */
+    private void logSecurityEventSafely(SecurityEvent event) {
+        try {
+            securityEventLogger.log(event);
+        }
+        catch (RuntimeException e) {
+            log.warn("Failed to emit security event of type {} - continuing, since security event logging must "
+                    + "never break the request it describes", event.type(), e);
+        }
     }
 
     private String currentPrincipalId() {

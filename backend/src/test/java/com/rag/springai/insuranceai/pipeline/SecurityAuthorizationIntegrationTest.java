@@ -249,10 +249,23 @@ class SecurityAuthorizationIntegrationTest {
                 .param("classification", "PUBLIC");
     }
 
+    /**
+     * FASE 23 incident follow-up (2026-08-11): a real full-suite run failed with a Postgres
+     * {@code duplicate key value violates unique constraint "ai_systems_name_key"} - root-caused
+     * to {@code governanceWriteWithGovernanceWriteAuthorityIsAllowedPastAuthorization} (the only
+     * one of the three tests using this body that actually reaches the database - the other two
+     * are rejected by authorization first) inserting a real row under a fixed name, with no
+     * cleanup, combined with this project's {@code TestcontainersConfiguration} intentionally
+     * reusing the same Postgres container ({@code withReuse(true)}) across separate {@code
+     * ./mvnw} invocations for local development speed (see {@code docs/testing/TESTCONTAINERS.md}).
+     * A fixed name is therefore only ever safe to insert once per container lifetime - a random
+     * suffix makes every real insert unique instead, which is the correct fix (this test's whole
+     * point is proving an authorized POST reaches {@code 201}, not asserting on a specific name).
+     */
     private String registerAiSystemBody() {
         return """
                 {
-                  "name": "Test AI System",
+                  "name": "Test AI System %s",
                   "purpose": "Test purpose",
                   "owner": "Test Owner",
                   "intendedUse": "Test intended use",
@@ -263,6 +276,6 @@ class SecurityAuthorizationIntegrationTest {
                   "humanOversightEscalationCondition": "Any customer-specific decision",
                   "humanOversightDecisionResponsibility": "The employee's manager"
                 }
-                """;
+                """.formatted(java.util.UUID.randomUUID());
     }
 }

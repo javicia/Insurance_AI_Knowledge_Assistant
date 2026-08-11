@@ -19,7 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RateLimitingFilterTest {
 
-    private final RateLimitingFilter filter = new RateLimitingFilter();
+    private final GatewaySecurityEventLogger securityEventLogger = new GatewaySecurityEventLogger();
+    private final RateLimitingFilter filter = new RateLimitingFilter(securityEventLogger);
 
     @Test
     void allowsRequestsWithinTheLimitThenReturns429WithRetryAfter() {
@@ -49,6 +50,54 @@ class RateLimitingFilterTest {
         assertEquals(30, passedThrough.get(), "the 31st request must never reach the downstream chain");
         assertNotNull(overLimitExchange.getResponse().getHeaders().getFirst("Retry-After"));
         assertEquals("0", overLimitExchange.getResponse().getHeaders().getFirst("X-RateLimit-Remaining"));
+    }
+
+    @Test
+    void a429EmitsARateLimitExceededSecurityEvent() {
+        GatewaySecurityEventLogger mockLogger = org.mockito.Mockito.mock(GatewaySecurityEventLogger.class);
+        RateLimitingFilter filterWithMockLogger = new RateLimitingFilter(mockLogger);
+        String user = "user-rate-limit-event";
+
+        for (int i = 0; i < 30; i++) {
+            ServerWebExchange exchange = authenticatedRequest("/api/audit/recent", user);
+            filterWithMockLogger.filter(exchange, ex -> Mono.empty()).contextWrite(withAuthentication(user)).block();
+        }
+        org.mockito.Mockito.verifyNoInteractions(mockLogger);
+
+        ServerWebExchange overLimitExchange = authenticatedRequest("/api/audit/recent", user);
+        filterWithMockLogger.filter(overLimitExchange, ex -> Mono.empty()).contextWrite(withAuthentication(user))
+                .block();
+
+        org.mockito.Mockito.verify(mockLogger)
+                .log(org.mockito.ArgumentMatchers.argThat(event -> event.type() == GatewaySecurityEventType.RATE_LIMIT_EXCEEDED
+                        && event.httpStatus() == 429 && event.path().equals("/api/audit/recent")
+                        && event.subject().contains(user)));
+    }
+
+    /**
+     * FASE 23 incident follow-up (2026-08-11): the correct 429 response must still be returned
+     * even if security event logging itself throws - see the backend's identical
+     * {@code SecurityErrorHandlerTest} tests for the full context.
+     */
+    @Test
+    void a429IsStillReturnedCorrectlyEvenIfSecurityEventLoggingThrows() {
+        GatewaySecurityEventLogger throwingLogger = org.mockito.Mockito.mock(GatewaySecurityEventLogger.class);
+        org.mockito.Mockito.doThrow(new RuntimeException("simulated event sink failure")).when(throwingLogger)
+                .log(org.mockito.ArgumentMatchers.any());
+        RateLimitingFilter filterWithThrowingLogger = new RateLimitingFilter(throwingLogger);
+        String user = "user-throwing-logger";
+
+        for (int i = 0; i < 30; i++) {
+            ServerWebExchange exchange = authenticatedRequest("/api/audit/recent", user);
+            filterWithThrowingLogger.filter(exchange, ex -> Mono.empty()).contextWrite(withAuthentication(user))
+                    .block();
+        }
+
+        ServerWebExchange overLimitExchange = authenticatedRequest("/api/audit/recent", user);
+        filterWithThrowingLogger.filter(overLimitExchange, ex -> Mono.empty()).contextWrite(withAuthentication(user))
+                .block();
+
+        assertEquals(429, overLimitExchange.getResponse().getStatusCode().value());
     }
 
     @Test

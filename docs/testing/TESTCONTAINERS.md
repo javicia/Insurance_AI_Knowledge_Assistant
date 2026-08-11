@@ -145,3 +145,11 @@ without weakening what is actually being verified.
 - **A test fails with a real duplicate-key/unique-constraint error only on a second run**: almost
   always missing `@ExtendWith(DatabaseCleanupExtension.class)`, or new state written to a table
   the extension doesn't yet truncate (add it to the `TRUNCATE` statement).
+- **...but the class already has `@ExtendWith(DatabaseCleanupExtension.class)`, and the table is
+  `ai_systems`/`prompts`/`risk_assessments`/`ai_models`/`ai_audit_records`**: those are
+  *deliberately* excluded from the extension's `TRUNCATE` (see its own Javadoc) because other
+  tests genuinely depend on `V5__ai_governance.sql`'s seed data surviving. If your test needs to
+  `INSERT` into one of these tables directly (not just read the seed row), give the row a random/
+  unique identifier per invocation rather than a fixed literal - a fixed name is only ever safe to
+  insert once per reused container's lifetime (found exactly this way in
+  `SecurityAuthorizationIntegrationTest`, FASE 23 - see `FASE_23_REPORT.md` section 6.6).

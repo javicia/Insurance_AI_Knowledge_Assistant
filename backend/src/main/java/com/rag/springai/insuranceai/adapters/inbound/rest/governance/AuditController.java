@@ -6,10 +6,12 @@ import com.rag.springai.insuranceai.domain.security.SecurityEvent;
 import com.rag.springai.insuranceai.domain.security.SecurityEventOutcome;
 import com.rag.springai.insuranceai.domain.security.SecurityEventType;
 import com.rag.springai.insuranceai.domain.shared.TraceId;
-import com.rag.springai.insuranceai.infrastructure.security.SecurityEventLogger;
+import com.rag.springai.insuranceai.ports.outbound.SecurityEventPort;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,10 +29,12 @@ import java.util.List;
         + "exposes raw question/answer/chunk text - only identifiers, counts and flags (data minimization).")
 class AuditController {
 
-    private final AuditService auditService;
-    private final SecurityEventLogger securityEventLogger;
+    private static final Logger log = LoggerFactory.getLogger(AuditController.class);
 
-    AuditController(AuditService auditService, SecurityEventLogger securityEventLogger) {
+    private final AuditService auditService;
+    private final SecurityEventPort securityEventLogger;
+
+    AuditController(AuditService auditService, SecurityEventPort securityEventLogger) {
         this.auditService = auditService;
         this.securityEventLogger = securityEventLogger;
     }
@@ -63,7 +67,16 @@ class AuditController {
         }
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         String principalId = authentication != null ? authentication.getName() : null;
-        securityEventLogger.log(SecurityEvent.now(SecurityEventType.AUDIT_ACCESS, SecurityEventOutcome.DETECTED,
-                traceId, principalId, request.getMethod(), request.getRequestURI(), null, null));
+        SecurityEvent event = SecurityEvent.now(SecurityEventType.AUDIT_ACCESS, SecurityEventOutcome.DETECTED,
+                traceId, principalId, request.getMethod(), request.getRequestURI(), null, null);
+        // Best-effort: a broken event sink must never turn a legitimate audit lookup into a 500 -
+        // see SecurityErrorHandler's identical reasoning.
+        try {
+            securityEventLogger.log(event);
+        }
+        catch (RuntimeException e) {
+            log.warn("Failed to emit AUDIT_ACCESS security event - continuing, since security event logging must "
+                    + "never break the request it describes", e);
+        }
     }
 }
