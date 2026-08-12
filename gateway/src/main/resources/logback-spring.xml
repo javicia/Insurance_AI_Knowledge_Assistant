@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- FASE 25 (Distributed Tracing): trace_id/span_id (underscored - OpenTelemetry's own
+         semantic-convention MDC key names; see backend/logback-spring.xml's identical comment for
+         the real bug this reflects). "none" only appears if tracing itself is disabled/
+         misconfigured. See docs/observability/DISTRIBUTED_TRACING.md. -->
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] [traceId=%X{trace_id:-none} spanId=%X{span_id:-none}] %logger{36} - %msg%n"/>
+
+    <appender name="CONSOLE_PLAIN" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- FASE 25: wraps CONSOLE_PLAIN so OpenTelemetryAppender can populate trace_id/span_id
+         before the line is written - see backend/logback-spring.xml's identical comment for why
+         this explicit wrapping is required (opentelemetry-logback-mdc-1.0 does not auto-populate
+         MDC globally on its own). -->
+    <appender name="CONSOLE" class="io.opentelemetry.instrumentation.logback.mdc.v1_0.OpenTelemetryAppender">
+        <appender-ref ref="CONSOLE_PLAIN"/>
+    </appender>
+
+    <!-- FASE B (SIEM pipeline) - identical reasoning to the backend's own logback-spring.xml,
+         see that file's comment. Ships GatewaySecurityEventLogger's RATE_LIMIT_EXCEEDED lines
+         alongside the backend's security events into the same collector/sink. -->
+    <appender name="SECURITY_EVENTS_SYSLOG" class="ch.qos.logback.classic.net.SyslogAppender">
+        <syslogHost>${INSURANCE_AI_OTEL_SYSLOG_HOST:-localhost}</syslogHost>
+        <port>${INSURANCE_AI_OTEL_SYSLOG_PORT:-5514}</port>
+        <facility>LOCAL0</facility>
+        <suffixPattern>insurance-ai-gateway: %msg</suffixPattern>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <logger name="com.rag.springai.insuranceai.gateway" level="INFO"/>
+
+    <logger name="security-events" level="WARN" additivity="true">
+        <appender-ref ref="SECURITY_EVENTS_SYSLOG"/>
+    </logger>
+</configuration>

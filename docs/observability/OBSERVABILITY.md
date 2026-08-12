@@ -8,10 +8,13 @@ observability this complements (what happened on one request / is quality regres
 
 Structured, correlated logging was already in place from earlier phases, not new here:
 
-- `logback-spring.xml` - console pattern includes `[traceId=%X{traceId:-none}]`.
+- `logback-spring.xml` - console pattern includes `[traceId=... spanId=... correlationId=...]`
+  (as of FASE 25, see `docs/observability/DISTRIBUTED_TRACING.md` for why `traceId`/`spanId` and
+  `correlationId` are three separate MDC keys, not one).
 - `TraceIdFilter` (`infrastructure.observability`) - a `@Order(HIGHEST_PRECEDENCE)` servlet filter
-  that puts `TraceId` into SLF4J's MDC for the whole request (reusing an inbound `X-Trace-Id`
-  header or generating one, echoing it on the response, removing it in `finally`).
+  that puts `TraceId` into SLF4J's MDC (key `correlationId` as of FASE 25) for the whole request
+  (reusing an inbound `X-Trace-Id` header or generating one, echoing it on the response, removing
+  it in `finally`).
 - `GlobalExceptionHandler` reads the same MDC value into every `ErrorResponse.traceId`.
 - No secrets, full PII, or stack traces are ever returned to a client - `ErrorResponse` carries
   only `code`/`message`/`traceId`; exceptions are logged server-side only.
@@ -60,11 +63,12 @@ slow", each fit for a different purpose.
 
 ## 4. What is deliberately not here
 
-- No Prometheus/Grafana/OpenTelemetry/APM stack - `docs/architecture/ARCHITECTURE.md`'s
-  Production Gap Analysis lists distributed tracing/model monitoring as explicitly out of scope
-  for this PoC. `/actuator/metrics` is queryable directly (`curl localhost:8080/actuator/metrics/
-  rag.llm.latency`) without needing a metrics backend to demonstrate the instrumentation exists
-  and works.
+- No Prometheus/Grafana metrics-dashboarding stack (`/actuator/metrics` is queryable directly,
+  `curl localhost:8080/actuator/metrics/rag.llm.latency`, without needing a metrics backend to
+  demonstrate the instrumentation exists and works) - still out of scope, not part of FASE 25.
+- **Distributed tracing (OpenTelemetry) is now implemented** (FASE 25, previously the one gap
+  this section explicitly listed as out of scope) - see
+  `docs/observability/DISTRIBUTED_TRACING.md` for the full architecture, not repeated here.
 - No per-retrieval-stage (semantic vs. lexical vs. reranking) timing - only the pipeline total.
   Would need four more timers for marginal value at this PoC's scale.
 - No embedding-generation-specific timer - embedding happens inside the semantic branch of

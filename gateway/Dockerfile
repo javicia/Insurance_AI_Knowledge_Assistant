@@ -12,10 +12,12 @@ WORKDIR /app
 
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN ./mvnw -B dependency:go-offline
+# See backend/Dockerfile's identical comment - a BuildKit cache mount for ~/.m2 turns "pom.xml
+# changed" back into "download the delta", not "re-download the whole dependency tree".
+RUN --mount=type=cache,target=/root/.m2,sharing=locked ./mvnw -B dependency:go-offline
 
 COPY src/ src/
-RUN ./mvnw -B clean package -DskipTests
+RUN --mount=type=cache,target=/root/.m2,sharing=locked ./mvnw -B clean package -DskipTests
 
 ########################################
 # Stage 2 - minimal runtime

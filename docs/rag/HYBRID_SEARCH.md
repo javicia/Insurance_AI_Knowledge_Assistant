@@ -85,9 +85,9 @@ setweight(to_tsvector('english', coalesce(metadata ->> 'section', '')), 'B')
 - **Relevance floor (FASE 14 audit remediation)**: PostgreSQL's `@@` match operator is the first
   gate - a row is either returned (genuinely matched the query) or it is not - but "matched at
   all" and "matched well" are different things: `@@` is satisfied by a single weak keyword overlap
-  just as readily as a strong multi-term match. `insurance-ai.rag.lexical.min-rank` (default
-  `0.0`, i.e. no behaviour change from the original FASE 6 design until tuned) adds a second gate
-  on the actual `ts_rank_cd` value. See `AskInsuranceKnowledgeUseCase`'s no-answer policy and
+  just as readily as a strong multi-term match. `insurance-ai.rag.lexical.min-rank` adds a second
+  gate on the actual `ts_rank_cd` value. Calibrated in FASE 26 against measured data - see
+  section 7.1 below. See also `AskInsuranceKnowledgeUseCase`'s no-answer policy and
   `docs/adr/ADR-012-AUDIT-REMEDIATION.md`.
 
 Verified empirically during this project (not assumed): `to_tsvector('english', 'covers')` and
@@ -140,11 +140,39 @@ to make this possible.
 See `AskInsuranceKnowledgeUseCase`'s Javadoc for the authoritative statement. Summary: a final
 candidate qualifies as grounding evidence if `semanticScore >= insurance-ai.rag.semantic.
 similarity-threshold` (FASE 5's original criterion) **or** it has a non-null `lexicalScore` that
-also clears `insurance-ai.rag.lexical.min-rank` (FASE 14 audit remediation - defaults to `0.0`,
-reproducing the original FASE 6 "PostgreSQL's own match predicate is the bar" behaviour exactly;
-see `docs/adr/ADR-012-AUDIT-REMEDIATION.md`). Neither `fusionScore` nor `rerankerScore` is ever
-used as grounding evidence - see ADR-006 decision 4 for why the reranker specifically must never be
-mistaken for proof of grounding.
+also clears `insurance-ai.rag.lexical.min-rank` (FASE 14 audit remediation; see
+`docs/adr/ADR-012-AUDIT-REMEDIATION.md`, and section 7.1 below for its calibration). Neither
+`fusionScore` nor `rerankerScore` is ever used as grounding evidence - see ADR-006 decision 4 for
+why the reranker specifically must never be mistaken for proof of grounding.
+
+### 7.1 Calibrating `lexical.min-rank` (FASE 26)
+
+The value was previously an uncalibrated `0.0` placeholder, explicitly flagged as "must be raised
+once real `ts_rank_cd` distributions have been observed". FASE 26 observed them, with the exact
+production ranking expression, against the real ingested corpus in the running database
+(`calibrate_lexical_min_rank.sql`), over two disjoint question sets:
+
+| Question set | n | Matching chunks | `ts_rank_cd` |
+|---|---|---|---|
+| In-corpus (answerable) | 8 | 0-2 | **0.0909 - 0.375** |
+| Out-of-corpus (unanswerable) | 6 | **0 in every single case** | never computed |
+
+The important finding is a negative one: **this threshold is not what separates grounded from
+ungrounded.** `websearch_to_tsquery` has AND semantics, so a question containing any term absent
+from the corpus fails `content_tsv @@ query` outright and produces no row to rank at all. Every
+out-of-corpus question was rejected by the match operator itself, and would have been at *any*
+threshold value. Conversely, genuine matches ranked as low as `0.0909`, so raising the threshold
+past that point can only ever start discarding **true** positives.
+
+**Chosen: `0.05`** - deliberately below the measured floor of real matches (a 1.8x margin), so it
+changes no measured outcome today, while still rejecting a degenerate `ts_rank_cd = 0.0` match and
+providing defence in depth if the matching semantics are ever loosened (a switch to OR-semantics
+`to_tsquery` would start admitting weak partial matches, at which point this threshold becomes
+load-bearing).
+
+Two honest caveats: these numbers describe *this* corpus and must be re-measured for another, and
+the safety of the current configuration rests on AND-semantics matching rather than on the
+threshold itself.
 
 ## 8. Partial failure / graceful degradation
 

@@ -21,10 +21,16 @@ no additional wiring. Rejected alternative: hand-rolling a `/health` endpoint an
 logging - strictly more code to achieve what a standard, minimal Spring Boot module already
 provides.
 
-**2. No Prometheus/Grafana/OpenTelemetry.** `/actuator/metrics/{name}` is directly queryable and
-proves the instrumentation is real without a metrics backend. Brief section 61 (no overengineering)
-and the Production Gap Analysis already list full observability/APM infrastructure as out of scope
-for this PoC - adding a scrape target and dashboard would be exactly that overengineering.
+**2. No Prometheus/Grafana metrics dashboard.** `/actuator/metrics/{name}` is directly queryable
+and proves the instrumentation is real without a metrics-dashboarding backend. Brief section 61
+(no overengineering) still applies here - adding a scrape target and dashboard for two custom
+timers would be exactly that overengineering.
+**Update (FASE 25)**: this decision originally also excluded OpenTelemetry/distributed tracing -
+that half is now reversed. Real distributed tracing (spans, W3C `traceparent` propagation, an
+OpenTelemetry Collector, Jaeger) was added once the actual gap (no way to see a single request's
+latency broken down hop-by-hop across WAF/Gateway/Backend/Postgres/Kafka, only whole-pipeline
+timers) became a real, demonstrated limitation rather than a hypothetical one - see
+`docs/observability/DISTRIBUTED_TRACING.md` for the full architecture and reasoning.
 
 **3. Two timers, not per-stage instrumentation.** `rag.retrieval.latency` (whole
 `HybridRetrievalService.retrieve` pipeline) and `rag.llm.latency` (the `LlmProvider#complete` call

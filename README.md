@@ -13,7 +13,7 @@ making a claims/pricing/eligibility/underwriting decision.** The system informs;
 decides (see `docs/governance/HUMAN_OVERSIGHT.md`). A single-page Angular UI (chat, document
 upload/status, and read views onto governance/audit/evaluation) is a fully independent deployable
 served behind its own API Gateway - see [Frontend](#frontend) and
-[Architecture: three independent deployables](#architecture-three-independent-deployables) below.
+[Architecture](#architecture-independent-deployables-behind-a-single-edge) below.
 
 ## Tech stack
 
@@ -29,22 +29,37 @@ served behind its own API Gateway - see [Frontend](#frontend) and
 - OpenAI and Anthropic as pluggable LLM providers (`LlmProvider` port), plus a deterministic
   `fake` provider for offline testing/demo - never presented as a real provider
 
-## Architecture: three independent deployables
+## Architecture: independent deployables behind a single edge
 
 Since FASE 16 (`docs/adr/ADR-014-FRONTEND-BACKEND-SEPARATION.md`), the frontend, backend, and API
-gateway are three genuinely separate products - separate Maven/npm projects, separate Docker
-images, no shared code, no shared build, communicating only over HTTP/REST:
+gateway are genuinely separate products - separate Maven/npm projects, separate Docker images, no
+shared code, no shared build, communicating only over HTTP/REST. FASE 17-21 added a real IAM
+(Keycloak, OAuth2/OIDC) and a WAF (ModSecurity + OWASP CRS) as the actual single browser-facing
+edge - the gateway is no longer reached directly by the browser:
 
 ```
-Browser → frontend (nginx, static Angular bundle)
-Browser → gateway (Spring Cloud Gateway) → backend (Spring Boot API) → PostgreSQL/Kafka/LLM
+Browser → WAF (ModSecurity/OWASP CRS, the one public edge)
+            ├── / → frontend (nginx, static Angular bundle)
+            └── /api/** → gateway (Spring Cloud Gateway, JWT validation, rate limiting)
+                              → backend (Spring Boot API) → PostgreSQL/Kafka/LLM
+                              ↘ Keycloak (OAuth2/OIDC, independent deployable)
+
+backend/gateway ─(OTLP + syslog)─→ otel-collector ─→ Jaeger (trace storage/UI)
+                                                  └─→ [security events; SIEM-ready seam - see
+                                                       docs/security/SIEM.md]
 ```
 
-The frontend's JavaScript calls the gateway directly (`PUBLIC_API_BASE_URL`, injected at container
-startup - see [Frontend](#frontend)); the gateway is the only path from the browser to the backend
-API in the Docker Compose topology (the backend's own port is also published for direct developer
-access - see [Quick start](#quick-start) Option B). `scripts/verify-module-separation.sh` is an
-automated, CI-runnable check that the three deployables stay genuinely independent.
+`PUBLIC_API_BASE_URL` (injected into the frontend container at startup - see
+[Frontend](#frontend)) points at the WAF, not the gateway. The gateway's and backend's own ports
+are also published for direct developer access (curl/Swagger) - see [Quick start](#quick-start)
+Option B - but real browser traffic in the Docker Compose topology only ever goes through the
+WAF. `scripts/verify-module-separation.sh` is an automated, CI-runnable check that the deployables
+stay genuinely independent. See `docs/adr/ADR-016-WAF-EDGE.md` and
+`docs/security/IAM_ARCHITECTURE.md` for the full reasoning. Distributed tracing (FASE 25 - real
+OpenTelemetry spans, W3C `traceparent` propagation, an OTel Collector, Jaeger) is documented
+separately in `docs/observability/DISTRIBUTED_TRACING.md` - see that document before assuming the
+`X-Trace-Id` header/MDC correlation ID mentioned elsewhere in this README is the same thing (it is
+not; both exist side by side, see that document section 4 for exactly why).
 
 ## RAG pipeline at a glance
 
@@ -56,7 +71,7 @@ Employee → guardrails (prompt injection / PII) → hybrid retrieval (semantic 
 
 Full detail: `docs/architecture/ARCHITECTURE.md`, `docs/architecture/C4.md`,
 `docs/architecture/COMPONENTS.md`. Every architectural decision that could plausibly be
-questioned later has a numbered ADR under `docs/adr/` (currently ADR-001 through ADR-014).
+questioned later has a numbered ADR under `docs/adr/` (currently ADR-001 through ADR-016).
 
 ## Bounded contexts
 
@@ -71,10 +86,10 @@ questioned later has a numbered ADR under `docs/adr/` (currently ADR-001 through
 
 ## Quick start
 
-Two ways to run this: the full product in Docker (all six services - fastest way to see the whole
-thing, including the Angular UI behind the gateway), or the backend/frontend on the host against
-containerized infrastructure only (the day-to-day development loop). Both use the same
-`docker-compose.yml`.
+Two ways to run this: the full product in Docker (all ten services - fastest way to see the
+whole thing, including IAM login, the WAF edge, and distributed tracing), or the backend/frontend
+on the host against containerized infrastructure only (the day-to-day development loop). Both use
+the same `docker-compose.yml`.
 
 ### Option A - full product in Docker (no local Node/Java toolchain needed)
 
@@ -85,16 +100,25 @@ cp .env.example .env   # defaults already work with the fake provider, no real A
 docker compose up -d --build
 ```
 
-This builds and starts all six services: `postgres`, `kafka`, `kafka-ui`, `backend` (Spring Boot
-API), `gateway` (Spring Cloud Gateway), and `frontend` (nginx serving the Angular build) - see
-[Architecture: three independent deployables](#architecture-three-independent-deployables). Once
-`docker compose ps` shows all of them `healthy`:
+This builds and starts all ten services: `postgres`, `kafka`, `kafka-ui`, `keycloak` (OAuth2/
+OIDC IAM), `backend` (Spring Boot API), `gateway` (Spring Cloud Gateway), `waf` (ModSecurity/OWASP
+CRS, the one public edge), `frontend` (nginx serving the Angular build), `otel-collector`
+(OpenTelemetry Collector), and `jaeger` (trace storage/UI) - see
+[Architecture](#architecture-independent-deployables-behind-a-single-edge) and
+`docs/observability/DISTRIBUTED_TRACING.md`. Once `docker compose ps` shows every *healthcheck-
+bearing* service `healthy` (`kafka-ui` has no healthcheck defined - it stays `Up`, not `healthy`;
+that is expected, not a defect, see docs/observability/DISTRIBUTED_TRACING.md's evidence section
+for the full per-service healthcheck inventory) - Keycloak's own Quarkus startup can take up to
+~15 minutes on a slow disk, see `docs/testing/TESTCONTAINERS.md` and
+`KeycloakJwtValidationTest`'s Javadoc for the empirical measurement:
 
-- **Application (UI)**: `http://localhost:8083/` - the frontend calls the gateway directly from
-  the browser
-- **API (via gateway)**: `http://localhost:8082/api/**`
-- **Backend directly** (developer convenience - Swagger UI, `curl`): `http://localhost:8080`,
-  `http://localhost:8080/swagger-ui.html`
+- **Application (UI) and API - through the WAF, the real browser-facing edge**:
+  `http://localhost:8000/`
+- **Keycloak** (login UI, realm admin): `http://localhost:8180`
+- **Jaeger UI** (distributed trace search/visualization): `http://localhost:16686`
+- **Gateway directly** (developer convenience, bypasses the WAF): `http://localhost:8082/api/**`
+- **Backend directly** (developer convenience - Swagger UI, `curl`, bypasses gateway+WAF):
+  `http://localhost:8080`, `http://localhost:8080/swagger-ui.html`
 - Kafka UI: `http://localhost:8081`
 
 ### Option B - backend/frontend on the host, infrastructure in Docker (development loop)
@@ -156,13 +180,24 @@ real controllers - see `docs/adr/ADR-011-API-DOCUMENTATION.md`). Health check:
 
 ```bash
 cd backend && ./mvnw clean verify           # unit + real-Postgres/Kafka integration (Testcontainers)
-cd frontend && npm test -- --watch=false    # Vitest unit/component/interceptor tests
-cd gateway && ./mvnw clean verify           # routing/CORS/correlation-id tests
+cd frontend && npx ng test --watch=false    # Vitest unit/component/interceptor tests
+cd gateway && ./mvnw clean verify           # routing/CORS/correlation-id/trace-propagation tests
 ./scripts/verify-module-separation.sh       # confirms no cross-module coupling regressed
 ```
 
+**Browser E2E (Playwright)** - runs against the *running* Docker stack, through the WAF:
+
+```bash
+docker compose up -d                        # the suite does not start the stack itself
+cd e2e && npm install && npx playwright install chromium
+npx playwright test
+```
+
 See `docs/testing/TESTCONTAINERS.md` for why backend containers are reused across the suite and
-how per-test isolation is achieved without starting a new container per test class.
+how per-test isolation is achieved without starting a new container per test class, and
+`docs/testing/E2E_PLAYWRIGHT.md` for why the E2E suite targets the WAF rather than the gateway or
+backend directly - including the six real deployment defects that decision surfaced, none of which
+any non-browser check could see.
 
 ## API overview
 
@@ -196,14 +231,15 @@ Material, Vitest) covering five routes: the Assistant chat (home screen), Docume
 the backend's existing endpoints. Since FASE 16, it is a fully independent deployable: its own
 Dockerfile builds the Angular bundle and serves it from `nginxinc/nginx-unprivileged` - no JVM, no
 Maven, no shared build with the backend. It knows exactly one external fact,
-`PUBLIC_API_BASE_URL` (the gateway's browser-reachable URL), injected at container startup by
-`docker-entrypoint.sh` into a generated `env.js` - never a database URL, Kafka URL, LLM credential,
-or internal service hostname, and never baked into the build (the same image is deployable against
-any environment's gateway URL without a rebuild). See `docs/frontend/FRONTEND_ARCHITECTURE.md`
-(directory structure, state management, testing), `docs/frontend/UI_GUIDELINES.md` (design tokens,
-components, accessibility), `docs/adr/ADR-013-FRONTEND-ARCHITECTURE.md` (why Angular/Material/
-signals), and `docs/adr/ADR-014-FRONTEND-BACKEND-SEPARATION.md` (why it is now independently
-deployed, superseding ADR-013's single-container packaging).
+`PUBLIC_API_BASE_URL` (the WAF's browser-reachable URL, the real edge since FASE 20 - see
+`docs/adr/ADR-016-WAF-EDGE.md`), injected at container startup by `docker-entrypoint.sh` into a
+generated `env.js` - never a database URL, Kafka URL, LLM credential, or internal service
+hostname, and never baked into the build (the same image is deployable against any environment's
+edge URL without a rebuild). See `docs/frontend/FRONTEND_ARCHITECTURE.md` (directory structure,
+state management, testing), `docs/frontend/UI_GUIDELINES.md` (design tokens, components,
+accessibility), `docs/adr/ADR-013-FRONTEND-ARCHITECTURE.md` (why Angular/Material/signals), and
+`docs/adr/ADR-014-FRONTEND-BACKEND-SEPARATION.md` (why it is now independently deployed,
+superseding ADR-013's single-container packaging).
 
 ## API Gateway
 
@@ -236,30 +272,43 @@ ask → citation → audit trace demo end to end.
 - **Testing strategy**: `docs/testing/TESTCONTAINERS.md` (backend); frontend testing is covered in
   `docs/frontend/FRONTEND_ARCHITECTURE.md` section 11 rather than a separate file
 - **Demo / manual E2E walkthrough**: `docs/demo/DEMO_GUIDE.md`, `FINAL_FRONTEND_AUDIT.md`
-- **Every architectural decision**: `docs/adr/ADR-001` through `ADR-013`
+- **Every architectural decision**: `docs/adr/ADR-001` through `ADR-016`
 
 There is no separate `docs/DEVELOPMENT.md`/`docs/DEPLOYMENT.md`/`docs/TESTING.md`: this README's
-Quick Start (both run modes), Single-container deployment, and per-suite test commands already
-cover that ground without duplicating it, consistent with this project's existing pattern of one
-focused doc per topic under `docs/<topic>/` rather than a second, competing top-level index.
+Quick Start (both run modes) and per-suite test commands already cover that ground without
+duplicating it, consistent with this project's existing pattern of one focused doc per topic under
+`docs/<topic>/` rather than a second, competing top-level index.
 
 ## Production Gap Analysis
 
-Explicitly out of scope for this PoC (not implemented, not simulated as implemented):
+**Implemented and real** (not simulated, not stubbed - see the dedicated docs for exactly what
+each one does and does not cover): IAM/authentication/authorization on every `/api/**` endpoint via
+Keycloak OAuth2/OIDC + Spring Security, re-validated independently at both the gateway and the
+backend (`docs/security/IAM_ARCHITECTURE.md`); a real API Gateway (Spring Cloud Gateway) with
+per-identity/per-route rate limiting (`docs/architecture/API_GATEWAY.md`); a real WAF (ModSecurity
++ OWASP CRS) as the single browser-facing edge (`docs/adr/ADR-016-WAF-EDGE.md`); **real distributed
+tracing** (FASE 25) - OpenTelemetry spans via `micrometer-tracing-bridge-otel`, W3C `traceparent`
+propagation across WAF→Gateway→Backend, an OpenTelemetry Collector, and Jaeger for trace storage/
+visualization (`docs/observability/DISTRIBUTED_TRACING.md` - covers gateway/backend HTTP, JDBC, and
+Kafka producer/consumer spans; explicitly does **not** cover the WAF hop itself or the browser, see
+that document's own limitations section); a **SIEM-ready security event pipeline** - structured
+JSON security events (authentication/authorization/rate-limit/prompt-injection/PII/audit) shipped
+via the same OpenTelemetry Collector to a pluggable sink (`docs/security/SIEM.md`) - **not** a SIEM
+product itself; no Splunk/Elastic Security/Sentinel is connected, an explicit, documented boundary
+(the collector-to-real-SIEM hop is a config-only change away, requiring no application code).
 
-IAM/authentication/authorization on any endpoint (including `/api/governance/**`, `/api/audit/**`,
-`/actuator/**`, `/swagger-ui.html`, `/v3/api-docs`, and the Angular UI itself - it is not
-behind a login), API Gateway, rate limiting, WAF, SIEM integration, distributed tracing beyond the
-custom `traceId` MDC correlation (now also surfaced in the Angular UI's `TechnicalDetails`
-component), managed/HA PostgreSQL and Kafka, backup/disaster recovery, model risk management,
-third-party model monitoring, formal legal/compliance/DPO review of the AI Act self-assessment
+**Explicitly out of scope for this PoC** (not implemented, not simulated as implemented):
+managed/HA PostgreSQL and Kafka, backup/disaster recovery, model risk management, third-party
+model monitoring, formal legal/compliance/DPO review of the AI Act self-assessment
 (`docs/governance/AI_ACT.md`), independent security review or penetration testing, data retention
-policy, a formal incident response process, i18n/dark mode, and an automated browser E2E suite
-(Playwright/Cypress - E2E validation is manual/scripted against the real Docker Compose stack, see
-`FINAL_FRONTEND_AUDIT.md`). Every fake/heuristic component (`FakeLlmAdapter`,
-`FakeEmbeddingModelAdapter`, `RuleBasedPromptInjectionGuard`, `RuleBasedPiiGuard`,
-`RuleBasedReranker`) is documented as such in its own Javadoc and in the corresponding `docs/`
-file - never presented as a production-grade equivalent.
+policy, a formal incident response process, i18n/dark mode, browser/frontend-side tracing spans, a
+transactional outbox for document-ingestion events (a document uploaded while Kafka is down is
+left permanently in `UPLOADED` - reproduced and documented in `docs/resilience/RESILIENCE.md`),
+and cross-browser/visual/accessibility E2E coverage (the Playwright suite is real but
+Chromium-only, see `docs/testing/E2E_PLAYWRIGHT.md`). Every fake/heuristic component
+(`FakeLlmAdapter`, `FakeEmbeddingModelAdapter`, `RuleBasedPromptInjectionGuard`,
+`RuleBasedPiiGuard`, `RuleBasedReranker`) is documented as such in its own Javadoc and in the
+corresponding `docs/` file - never presented as a production-grade equivalent.
 
 ## Configuration reference
 

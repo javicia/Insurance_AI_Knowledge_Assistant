@@ -8,13 +8,18 @@ import com.rag.springai.insuranceai.domain.shared.exception.PermanentProcessingE
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -83,6 +88,55 @@ class GlobalExceptionHandler {
         return respond(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "The request did not pass validation.");
     }
 
+    /**
+     * FASE 25 E2E finding (same client-error-answered-as-500 family as the three handlers above,
+     * found the same way - by actually calling the endpoint rather than by inspection): a
+     * multipart/form-data request missing a required {@code @RequestParam} (e.g.
+     * {@code POST /api/documents} without {@code name}) threw
+     * {@link MissingServletRequestParameterException}, which fell through to
+     * {@link #handleUnexpectedException} and answered {@code 500}. A caller omitting a required
+     * parameter is unambiguously a client error, and answering {@code 500} both misleads the
+     * caller (implying a server fault they should retry) and pollutes real server-fault alerting.
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    ResponseEntity<ErrorResponse> handleMissingServletRequestParameterException(
+            MissingServletRequestParameterException exception) {
+        log.warn("Missing required request parameter: {}", exception.getParameterName());
+        return respond(HttpStatus.BAD_REQUEST, "MISSING_REQUEST_PARAMETER",
+                "A required request parameter is missing.");
+    }
+
+    /**
+     * Same client-error reasoning as {@link #handleMissingServletRequestParameterException}, found
+     * during the same FASE 25 E2E pass: a parameter present but unconvertible to its declared type
+     * (most realistically an invalid enum constant, e.g. {@code type=NOT_A_DOCUMENT_TYPE} against
+     * {@code POST /api/documents}) throws this instead of the missing-parameter exception, and was
+     * likewise answered as {@code 500}. Deliberately does not echo the offending value back in the
+     * response body - it is attacker-controlled input, and this project's error contract never
+     * reflects raw request content (see {@link ErrorResponse}); the parameter *name* alone is
+     * enough for a caller to fix their request, and the value is available server-side in the log.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatchException(
+            MethodArgumentTypeMismatchException exception) {
+        log.warn("Request parameter '{}' could not be converted to {}", exception.getName(),
+                exception.getRequiredType() != null ? exception.getRequiredType().getSimpleName() : "its declared type");
+        return respond(HttpStatus.BAD_REQUEST, "INVALID_REQUEST_PARAMETER",
+                "A request parameter has an invalid value.");
+    }
+
+    /**
+     * Same client-error reasoning again: a {@code multipart/form-data} endpoint called without the
+     * required file part (or with a non-multipart body) is a malformed client request, not a
+     * server fault.
+     */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    ResponseEntity<ErrorResponse> handleMissingServletRequestPartException(
+            MissingServletRequestPartException exception) {
+        log.warn("Missing required multipart request part: {}", exception.getRequestPartName());
+        return respond(HttpStatus.BAD_REQUEST, "MISSING_REQUEST_PART", "A required request part is missing.");
+    }
+
     @ExceptionHandler(DomainException.class)
     ResponseEntity<ErrorResponse> handleDomainException(DomainException exception) {
         log.warn("Domain rule violation: {}", exception.errorCode());
@@ -105,6 +159,30 @@ class GlobalExceptionHandler {
     ResponseEntity<ErrorResponse> handleInfrastructureException(InfrastructureException exception) {
         log.error("Infrastructure failure: {}", exception.errorCode(), exception);
         return respond(HttpStatus.SERVICE_UNAVAILABLE, exception.errorCode(), exception.getMessage());
+    }
+
+    /**
+     * FASE 26 resilience finding, measured by actually stopping PostgreSQL and calling the API: a
+     * database outage surfaced as a generic {@code 500 INTERNAL_ERROR}. Spring translates a failed
+     * connection acquisition into {@link DataAccessResourceFailureException} (or
+     * {@link CannotCreateTransactionException} when it happens while starting a transaction),
+     * neither of which extends this project's own {@link InfrastructureException}, so both fell
+     * through to {@link #handleUnexpectedException}.
+     *
+     * <p>{@code 503} is the semantically correct answer and is materially different for a caller:
+     * {@code 500} says "this request is broken, do not bother retrying", while {@code 503} says
+     * "the service is temporarily unavailable" - which is exactly the situation, and is what makes
+     * a client's retry/backoff and an upstream load balancer's health logic behave sensibly.
+     *
+     * <p>Deliberately narrow: only these two resource-failure types are mapped. A
+     * {@code DataIntegrityViolationException}, for instance, is a data/logic fault and must NOT be
+     * reported as a transient outage.
+     */
+    @ExceptionHandler({ DataAccessResourceFailureException.class, CannotCreateTransactionException.class })
+    ResponseEntity<ErrorResponse> handleDatabaseUnavailable(Exception exception) {
+        log.error("Database unavailable", exception);
+        return respond(HttpStatus.SERVICE_UNAVAILABLE, "DATABASE_UNAVAILABLE",
+                "A required backing service is temporarily unavailable.");
     }
 
     @ExceptionHandler(Exception.class)

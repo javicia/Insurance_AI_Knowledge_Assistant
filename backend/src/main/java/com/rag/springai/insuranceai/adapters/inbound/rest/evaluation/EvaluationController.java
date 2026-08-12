@@ -19,8 +19,11 @@ import java.util.List;
 /**
  * AI Evaluation REST API (brief FASE 10 section 10). {@code POST /runs} runs {@code
  * InsuranceEvaluationDataset}'s built-in dataset through the real RAG pipeline synchronously and
- * returns the completed run - deliberately not async/queued (brief section 61: no overengineering
- * for a dataset of 7 cases against a local Postgres/fake-or-real LLM).
+ * returns the completed run - deliberately not async/queued (brief section 61: no overengineering)
+ * for a dataset of ~100 cases against a local Postgres and a fake-or-real LLM, which completes well
+ * inside a request timeout. A dataset an order of magnitude larger, or one calling a real
+ * rate-limited LLM provider per case, would need a queued/async run instead - that threshold is not
+ * reached here.
  */
 @RestController
 @RequestMapping("/api/evaluation")

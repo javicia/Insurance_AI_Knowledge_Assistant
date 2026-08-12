@@ -30,6 +30,7 @@
         <java.version>25</java.version>
         <spring-ai.version>2.0.0</spring-ai.version>
         <archunit.version>1.5.0</archunit.version>
+        <opentelemetry-instrumentation.version>2.30.0</opentelemetry-instrumentation.version>
     </properties>
     <dependencies>
         <dependency>
@@ -59,6 +60,50 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>3.1.0</version>
         </dependency>
+        <dependency>
+            <!-- FASE 25 (Distributed Tracing): the officially OpenTelemetry-project-maintained
+                 Spring Boot starter, not Spring Boot's own `management.tracing.*`/
+                 `micrometer-tracing-bridge-otel` combination - found and switched to after that
+                 combination genuinely failed to produce a real `Tracer` bean against Spring Boot
+                 4.1.0 (confirmed via `/actuator/conditions`: `NoopTracerAutoConfiguration`
+                 activated, `MicrometerTracingAutoConfiguration`'s propagator-dependent handlers
+                 stayed unmatched - Boot 4.1.0's own tracing auto-configuration module,
+                 `spring-boot-micrometer-tracing`, ships no class that actually constructs an
+                 OpenTelemetry SDK `Tracer`/`Propagator` bean, unlike Boot 3.x's now-removed
+                 `spring-boot-actuator-autoconfigure` tracing package). This starter auto-
+                 configures the full SDK (tracer provider, OTLP exporter, propagators) and the
+                 Micrometer bridge itself, independent of Spring Boot's own release cadence for
+                 tracing support - see docs/observability/DISTRIBUTED_TRACING.md section 2 for the
+                 full incident writeup. Reads standard `OTEL_*` env vars (`OTEL_SERVICE_NAME`,
+                 `OTEL_EXPORTER_OTLP_ENDPOINT`) - see docker-compose.yml. -->
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-spring-boot-starter</artifactId>
+            <!-- Version managed by the opentelemetry-instrumentation-bom import below - keeping
+                 this artifact's own version implicit (rather than re-pinning it here too) is what
+                 actually guarantees it stays aligned with every other io.opentelemetry* artifact
+                 the BOM manages. -->
+        </dependency>
+        <dependency>
+            <!-- FASE 25: populates SLF4J MDC with the real OpenTelemetry trace_id/span_id for
+                 every log line emitted while a span is active - without this, spans genuinely
+                 export to Jaeger correctly (verified independently) but every log line still
+                 shows `traceId=none spanId=none`, since the starter's own SDK wiring alone does
+                 not touch MDC. Explicitly versioned (not BOM-managed): this module's alpha
+                 release train is versioned independently of the stable
+                 `opentelemetry-instrumentation-bom` this project otherwise uses. -->
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-logback-mdc-1.0</artifactId>
+            <version>2.30.0-alpha</version>
+        </dependency>
+        <!-- FASE 25: real JDBC spans (PgVectorStoreAdapter/JdbcDocumentRepository/etc. queries)
+             come from `opentelemetry-spring-boot-starter`'s own bundled JDBC auto-instrumentation
+             (`io.opentelemetry.instrumentation:opentelemetry-jdbc`, pulled in transitively) - a
+             separate `net.ttddyy:datasource-micrometer-spring-boot` dependency was tried first
+             and removed: both libraries wrap the same DataSource/Statement, and running both
+             together produced a real
+             `NoClassDefFoundError: io/opentelemetry/api/impl/InstrumentationUtil` crash on the
+             very first JDBC query - see this file's opentelemetry-instrumentation-bom comment for
+             the full incident. -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-pdf-document-reader</artifactId>
@@ -194,6 +239,23 @@
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
                 <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <!-- FASE 25 (Distributed Tracing): pins every io.opentelemetry*/io.opentelemetry.
+                     instrumentation* artifact transitively pulled in by
+                     `opentelemetry-spring-boot-starter` to one mutually-compatible version set -
+                     found genuinely necessary, not precautionary: without this BOM, one of the
+                     starter's own transitive `opentelemetry-api` resolutions collided with
+                     another, producing a real
+                     `NoClassDefFoundError: io/opentelemetry/api/impl/InstrumentationUtil` at
+                     runtime (inside the starter's own JDBC auto-instrumentation) the very first
+                     time a JDBC query ran - a real bug, not a hypothetical one, root-caused via
+                     the actual stack trace before adding this fix. -->
+                <groupId>io.opentelemetry.instrumentation</groupId>
+                <artifactId>opentelemetry-instrumentation-bom</artifactId>
+                <version>${opentelemetry-instrumentation.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

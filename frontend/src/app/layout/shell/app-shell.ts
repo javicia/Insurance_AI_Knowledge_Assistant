@@ -23,7 +23,17 @@ export class AppShell {
     { initialValue: false },
   );
 
-  protected readonly sidenavOpened = signal(true);
+  /**
+   * Only consulted on handset (the template hard-codes `opened` to true on larger viewports,
+   * where the drawer is a permanent `side` drawer), so this is specifically "is the mobile
+   * overlay drawer open".
+   *
+   * FASE 26: this was `signal(true)`, which meant a phone-sized browser loaded the application
+   * with the navigation drawer already covering the entire screen - the user had to dismiss it
+   * before seeing any content. Found by driving a real 390x844 browser; the unit suite never
+   * renders at a handset breakpoint, and the drawer is correct on desktop either way.
+   */
+  protected readonly sidenavOpened = signal(false);
 
   protected toggleSidenav(): void {
     this.sidenavOpened.set(!this.sidenavOpened());

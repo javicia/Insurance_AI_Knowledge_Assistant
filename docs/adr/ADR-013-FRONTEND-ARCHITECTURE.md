@@ -107,12 +107,23 @@ one-time adaptation (Jasmine-only matchers like `toBeTrue()` don't exist in Vite
 by using `vi.useFakeTimers()` instead), documented in `docs/frontend/FRONTEND_ARCHITECTURE.md`
 section 11, not a reason to fall back to the older toolchain.
 
-**10. No E2E browser-automation suite (Playwright/Cypress).** Evaluated and deliberately deferred:
-a five-route internal PoC gets most of the same confidence from the existing 47-test unit/
-component/interceptor suite plus scripted manual verification against the real Docker Compose
-stack (`docs/demo/DEMO_GUIDE.md`). Adding a full E2E framework and its own CI lane is real ongoing
-maintenance cost the brief's "no overengineering" principle (section 61) weighs against at this
-scale — documented as a known limitation, not silently omitted.
+**10. ~~No E2E browser-automation suite (Playwright/Cypress).~~ SUPERSEDED (FASE 26).** This point
+originally deferred an E2E suite, reasoning that a five-route internal PoC got most of the same
+confidence from the unit/component/interceptor suite plus scripted manual verification against the
+real Docker Compose stack, and that a full E2E framework was ongoing maintenance cost the brief's
+"no overengineering" principle weighed against.
+
+**That reasoning proved wrong, and the evidence is unambiguous.** When a real Playwright suite was
+introduced (`e2e/`, see `docs/testing/E2E_PLAYWRIGHT.md`), its first run found **six defects that
+made the deployed application unusable in a browser** - the Angular app failing to bootstrap at all
+(blank page), a CSP directive that made login impossible, and a CORS origin that turned every
+browser API call into a 403, among others. All had been present while the unit suite, the container
+healthchecks, and every `curl`-based API check reported green - because none of those execute
+JavaScript, follow an OAuth redirect, or enforce a Content-Security-Policy.
+
+The maintenance-cost argument was real but was outweighed: for a system whose edge behaviour
+(WAF → CSP → OIDC redirect → CORS) is exercised *only* by a browser, "scripted manual verification"
+is not an equivalent substitute. The suite is now part of the project.
 
 ## Consequences
 

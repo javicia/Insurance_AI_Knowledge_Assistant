@@ -137,9 +137,16 @@ one polling-lifecycle test (`DocumentTrackerService`, fake timers).
 
 ## 12. Known limitations
 
-- No E2E browser-automation suite (Playwright/Cypress) - E2E validation is manual/scripted against
-  the real Docker Compose stack (`docs/demo/DEMO_GUIDE.md`, `FINAL_FRONTEND_AUDIT.md`), not an
-  automated headless-browser suite - a reasonable scope boundary for this PoC (brief section 61).
+- E2E browser automation **now exists** (FASE 26): a real Playwright suite in `e2e/`, driving a
+  real Chromium through the WAF against the running Docker stack, including a genuine OAuth2
+  Authorization Code + PKCE login - see `docs/testing/E2E_PLAYWRIGHT.md`. Its first run found six
+  defects that made the deployed app unusable in a browser and that no unit test, healthcheck or
+  `curl` check could see. Remaining E2E gaps: Chromium only (no cross-browser matrix), no visual
+  regression, and no automated accessibility assertions (`axe`).
+- **Zoneless change detection** (FASE 26): `provideZonelessChangeDetection()`. The app was
+  previously configured with `provideZoneChangeDetection()` while `zone.js` was neither a
+  dependency nor a declared polyfill, so it threw `NG0908` and rendered nothing in a browser. The
+  application is fully signal-based, which is precisely the model zoneless targets.
 - No i18n - English only, matching the project's English-only code/UI convention.
 - No dark mode - evaluated and deliberately not implemented (brief section 47: "if the result
   doesn't clearly improve, don't implement it" - a single, well-executed light theme was judged

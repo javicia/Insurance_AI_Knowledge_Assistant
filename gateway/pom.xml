@@ -36,6 +36,7 @@
              above, following the same "Boot N.M -> Cloud <year>.0.x" cadence this project's
              backend already establishes for its own dependency choices (Spring Boot 4.1.0). -->
         <spring-cloud.version>2025.1.2</spring-cloud.version>
+        <opentelemetry-instrumentation.version>2.30.0</opentelemetry-instrumentation.version>
     </properties>
     <dependencies>
         <dependency>
@@ -65,6 +66,52 @@
             <version>8.10.1</version>
         </dependency>
         <dependency>
+            <!-- FASE 25 (Distributed Tracing): the officially OpenTelemetry-project-maintained
+                 starter, not Spring Boot's own tracing auto-configuration - see backend/pom.xml's
+                 identical comment for the full incident writeup (Spring Boot 4.1.0's native
+                 tracing module produces no real Tracer bean).
+                 FASE 25 follow-up incident (found via real Jaeger evidence, not assumed): an
+                 earlier revision of this comment claimed Spring Cloud Gateway's own routing was
+                 "Observation-instrumented out of the box... propagated to the backend via W3C
+                 traceparent" once this starter was on the classpath. That was wrong - disproven
+                 by querying Jaeger's API for a real end-to-end request: the gateway produced a
+                 real *inbound* server span (opentelemetry-spring-webflux-5.3, bundled
+                 transitively by this starter), but the backend's span landed in a completely
+                 different trace ID, proving no traceparent header was ever sent on the gateway's
+                 outbound proxy call. Root cause: Spring Cloud Gateway Server WebFlux's routing
+                 filter (`NettyRoutingFilter`) proxies every request through reactor-netty's raw
+                 `HttpClient` directly, never through a Spring-managed `WebClient`/`RestClient`
+                 bean - so this starter's webclient-family instrumentation
+                 (opentelemetry-spring-web-3.1) never applies to it. A dedicated reactor-netty
+                 instrumentation library (the obvious next thing to reach for) does not exist as
+                 an importable dependency for this non-agent "library instrumentation" style
+                 integration - OpenTelemetry only ships raw-Netty channel instrumentation
+                 (`opentelemetry-netty-4.1` et al.) as *javaagent-only* bytecode-transformation
+                 modules, unusable without switching the entire gateway to `-javaagent` attachment
+                 (out of scope for this PoC's non-agent architecture). Fixed instead with a small,
+                 targeted `GlobalFilter` (GatewayTracePropagationFilter) that injects the W3C
+                 `traceparent`/`tracestate` headers onto the outbound request itself, before
+                 `NettyRoutingFilter` proxies it. Note this starter registers a real `OpenTelemetry`
+                 *bean* but does not necessarily install it as the JVM-global instance - that
+                 filter must therefore inject the bean, not call `GlobalOpenTelemetry` (which
+                 silently yields a no-op, header-injecting-nothing propagator). See that class's
+                 Javadoc for all three real bugs found here and
+                 docs/observability/DISTRIBUTED_TRACING.md section 6 for the end-to-end
+                 verification evidence (gateway and backend spans sharing one trace ID). -->
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-spring-boot-starter</artifactId>
+            <!-- Version managed by the opentelemetry-instrumentation-bom import below - see
+                 backend/pom.xml's identical comment for why this must not be re-pinned here. -->
+        </dependency>
+        <dependency>
+            <!-- FASE 25: same MDC population fix as the backend - see that module's identical
+                 comment and logback-spring.xml for the real bug this fixes (this appender must be
+                 explicitly wired, not just present on the classpath). -->
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-logback-mdc-1.0</artifactId>
+            <version>2.30.0-alpha</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
@@ -86,6 +133,16 @@
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
                 <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <!-- FASE 25: see backend/pom.xml's identical comment - pins every
+                     io.opentelemetry*/io.opentelemetry.instrumentation* artifact to one
+                     mutually-compatible version set. -->
+                <groupId>io.opentelemetry.instrumentation</groupId>
+                <artifactId>opentelemetry-instrumentation-bom</artifactId>
+                <version>${opentelemetry-instrumentation.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

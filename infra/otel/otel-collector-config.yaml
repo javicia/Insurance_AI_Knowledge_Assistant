@@ -1,0 +1,72 @@
+# FASE 25 (Distributed Tracing) + FASE B (SIEM pipeline): the OpenTelemetry Collector is the
+# single point where application code's dependency ends - backend/gateway export spans via
+# OTLP/HTTP, and the "security-events" logger ships via syslog, both to this collector, never
+# directly to a vendor SDK/backend. Swapping the trace exporter (Jaeger today) or the log exporter
+# (`debug` today) for Tempo/Honeycomb/Datadog/a real SIEM's ingestion endpoint is a config-only
+# change here, with zero application code touched - see docs/observability/DISTRIBUTED_TRACING.md
+# and docs/security/SIEM.md section 1 (this collector is the boundary that document's pipeline
+# diagram previously marked as "[NOT IMPLEMENTED IN THIS PoC]" for both traces and logs - both
+# now genuinely exist up to this collector; the collector-to-real-SIEM-product hop remains the
+# documented, honest boundary, since no such product is deployed in this PoC).
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+  # FASE B (SIEM pipeline): backend/gateway ship *only* their dedicated "security-events" SLF4J
+  # logger here, via a Logback SyslogAppender attached specifically to that one logger (see
+  # logback-spring.xml in each module) - not Docker's own container-level logging driver, which
+  # cannot selectively route a single logger and would have swept up every other application log
+  # line too. Every other logger keeps going to container stdout only, unchanged - matching
+  # docs/security/SIEM.md's "a log-routing config can send security-events.* to a different sink"
+  # design intent from FASE 23, now actually realized rather than only described. UDP/BSD syslog
+  # (RFC3164) because that is what Logback's built-in SyslogAppender speaks - no extra dependency
+  # needed for this narrowly-scoped log-shipping path.
+  syslog:
+    protocol: rfc3164
+    udp:
+      listen_address: 0.0.0.0:5514
+
+extensions:
+  # A real, standard healthcheck - not left undocumented as "runs, no way to tell if it's actually
+  # healthy". Exposes GET /health on :13133, wired into docker-compose.yml's `healthcheck:` block.
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+exporters:
+  # Jaeger (all-in-one, docker-compose.yml) accepts OTLP natively - no separate Jaeger-specific
+  # exporter/protocol needed on this side.
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  # FASE B: `debug` is genuinely sufficient evidence of a working log pipeline for this PoC - it
+  # prints the fully-parsed, structured record (not just raw bytes), verifiable via
+  # `docker logs insurance-ai-otel-collector`. A `file` exporter was tried first and dropped: the
+  # official distroless-style image runs as a fixed non-root UID (10001) with no shell to
+  # introspect and no writable path found for it without either a root-owned volume workaround or
+  # further trial-and-error against an image with no debugging tools - not worth it for a demo
+  # sink. A *real* SIEM sink (`splunk_hec`/`elasticsearch`/any OTLP-logs-compatible exporter the
+  # contrib collector image already ships) would be a network exporter anyway, not a local file,
+  # so this does not weaken the "swap one exporter, zero application code change" migration story.
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger, debug]
+    logs:
+      receivers: [syslog]
+      processors: [batch]
+      exporters: [debug]

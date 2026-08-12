@@ -127,6 +127,78 @@ services:
       kafka:
         condition: service_healthy
 
+  # FASE 25 (Distributed Tracing): the OpenTelemetry Collector - the single point every
+  # application's OTLP exporter dependency stops at (never a direct Jaeger/vendor SDK dependency
+  # in backend/gateway code). Jaeger all-in-one is the local trace-storage/visualization backend
+  # for this PoC - swappable in infra/otel/otel-collector-config.yaml alone for a real deployment
+  # (Tempo/Honeycomb/Datadog/a SIEM's trace ingestion), with zero application code change. See
+  # docs/observability/DISTRIBUTED_TRACING.md.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    container_name: insurance-ai-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./infra/otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      # Published for direct developer access (a local script/tool exporting spans without going
+      # through the full stack) - real traffic in this topology always originates from
+      # backend/gateway on the internal Docker network.
+      - "4318:4318" # OTLP/HTTP
+      - "4317:4317" # OTLP/gRPC
+      - "5514:5514/udp" # syslog (FASE B, security-events log pipeline)
+      - "13133:13133" # health_check extension - see the honest healthcheck note below
+    networks:
+      - insurance-ai-net
+    depends_on:
+      jaeger:
+        condition: service_started
+    # No Docker-level HEALTHCHECK on this specific service, and that is a verified fact, not an
+    # oversight: `otel/opentelemetry-collector-contrib` is a distroless-style image with no shell
+    # and no curl/wget (confirmed by attempting `docker run --entrypoint sh` against it - it fails
+    # with "executable file not found in $PATH"), so a `CMD-SHELL curl ...` healthcheck genuinely
+    # cannot run inside this container the way every other service's healthcheck does. The
+    # `health_check` extension (otel-collector-config.yaml) still provides a *real*, externally
+    # verifiable health endpoint (`curl http://localhost:13133/health` from the host or from
+    # another container that has curl, e.g. `docker compose exec waf curl -s
+    # http://otel-collector:13133/health`) - this service is correctly reported by `docker compose
+    # ps` as "Up" without a health column, the same honest category `kafka-ui` already uses, not
+    # silently presented as "healthy".
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  jaeger:
+    # All-in-one: in-memory trace storage, real for this PoC's demonstration purpose (a
+    # restart loses trace history) - a production deployment would point Jaeger at a real
+    # storage backend (Elasticsearch/Cassandra) instead, out of scope here. Accepts OTLP
+    # natively (no separate Jaeger-protocol exporter/agent needed anywhere in this stack).
+    image: jaegertracing/all-in-one:1.76.0
+    container_name: insurance-ai-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      # Jaeger UI - real browser-facing trace visualization for this PoC's demonstration
+      # purpose only, not routed through the WAF (an internal observability tool, not a
+      # customer/employee-facing surface).
+      - "16686:16686"
+    networks:
+      - insurance-ai-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:16686/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
   # FASE 16 (frontend/backend separation, ADR-014): three independently built/deployed
   # services replace the former single combined `insurance-ai` image - backend, gateway, and
   # frontend each have their own Dockerfile and share no build, no artifact, no source. The
@@ -159,6 +231,15 @@ services:
       # The browser-facing address - identical to what Keycloak actually prints into every
       # token's iss claim, since that reflects whatever URL obtained the token in the first place.
       INSURANCE_AI_OIDC_ISSUER: ${INSURANCE_AI_OIDC_ISSUER:-http://localhost:8180/realms/insurance-ai}
+      # FASE 25: internal Docker network address of the collector - the OTLP exporter is
+      # resilient to a temporarily unavailable collector (buffers/drops, never blocks or crashes
+      # the application), so this is not a `condition: service_healthy` dependency below.
+      INSURANCE_AI_OTLP_ENDPOINT: http://otel-collector:4318
+      # FASE B (SIEM pipeline): where SECURITY_EVENTS_SYSLOG (logback-spring.xml) ships the
+      # security-events logger - same resilience note as the OTLP endpoint above (Logback's
+      # SyslogAppender is fire-and-forget UDP).
+      INSURANCE_AI_OTEL_SYSLOG_HOST: otel-collector
+      INSURANCE_AI_OTEL_SYSLOG_PORT: "5514"
     ports:
       # Published for direct developer access (Swagger UI, curl) - real network segmentation
       # (removing this and routing every external call through the gateway/WAF only) is FASE 40's
@@ -173,6 +254,8 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
       interval: 15s
@@ -195,14 +278,26 @@ services:
     restart: unless-stopped
     environment:
       INSURANCE_AI_BACKEND_URI: http://backend:8080
-      # The browser-facing origin of the frontend container (host-mapped port, not the internal
-      # Docker network address - CORS is enforced against what the browser itself sends as
-      # `Origin`).
-      INSURANCE_AI_ALLOWED_ORIGIN: ${INSURANCE_AI_ALLOWED_ORIGIN:-http://localhost:8083}
+      # The browser-facing origin, as the browser itself reports it in `Origin` - which since
+      # FASE 20 is the WAF (:8000), the one public edge, NOT the frontend container's own
+      # host-mapped port.
+      #
+      # FASE 26 incident: this was `http://localhost:8083` (the frontend's direct port), left over
+      # from the pre-WAF topology. A browser loading the SPA from the WAF sends
+      # `Origin: http://localhost:8000` on its API calls, Spring's CORS filter rejected it, and
+      # every write from the real UI failed with **403** - while the API itself was perfectly
+      # healthy. It stayed invisible because curl and Playwright's API client send no `Origin`
+      # header at all, so every non-browser check passed; only a real browser reproduces it.
+      # ModSecurity was ruled out as the source by its own audit log (`is_interrupted: false`,
+      # empty `messages`), and the 403 carried `Vary: Origin` - the CORS filter's fingerprint.
+      INSURANCE_AI_ALLOWED_ORIGIN: ${INSURANCE_AI_ALLOWED_ORIGIN:-http://localhost:8000}
       # FASE 19: the gateway independently validates JWTs too (defense in depth) - same internal/
       # external URL split as the backend, see docs/security/IAM_ARCHITECTURE.md section 2.
       INSURANCE_AI_OIDC_JWK_SET_URI: http://keycloak:8080/realms/insurance-ai/protocol/openid-connect/certs
       INSURANCE_AI_OIDC_ISSUER: ${INSURANCE_AI_OIDC_ISSUER:-http://localhost:8180/realms/insurance-ai}
+      INSURANCE_AI_OTLP_ENDPOINT: http://otel-collector:4318
+      INSURANCE_AI_OTEL_SYSLOG_HOST: otel-collector
+      INSURANCE_AI_OTEL_SYSLOG_PORT: "5514"
     ports:
       - "8082:8082"
     networks:
@@ -210,6 +305,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost:8082/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
       interval: 15s

@@ -1,16 +1,18 @@
-# Structured Security Event Logging (FASE 23)
+# SIEM-Ready Security Event Pipeline (FASE 23, collector integration FASE B)
 
-Status: living document. Covers what actually exists today - structured security event logging
-to stdout - and draws an explicit, honest line at what does not exist: a SIEM.
+Status: living document. Covers what actually exists today - structured security events shipped
+to a real, running OpenTelemetry Collector - and draws an explicit, honest line at what does not
+exist: a SIEM.
 
 ## 1. What this is, and what it is not
 
-**This is structured security event logging. This is NOT SIEM integration.**
+**This is a SIEM-ready security event pipeline. This is NOT a SIEM.**
 
 A SIEM (Security Information and Event Management system - e.g. Splunk, Elastic Security,
 Microsoft Sentinel) ingests, correlates, alerts on, and retains security events from many
-sources. No such system is deployed, configured, or connected to in this PoC. What exists is the
-first half of the pipeline a real SIEM integration would need:
+sources. No such *product* is deployed, configured, or connected to in this PoC. What genuinely
+exists, verified end-to-end (see `FASE_25_REPORT.md` for the exact commands and captured
+evidence), is everything up to that product:
 
 ```
 application code
@@ -25,21 +27,32 @@ SecurityEventPort (outbound port)          -- backend only, see section 4
 SecurityEventLogger / GatewaySecurityEventLogger   -- infrastructure adapter
    |
    v
-"security-events" SLF4J logger -> structured JSON line -> stdout
-   |
-   v
-[NOT IMPLEMENTED] external log collector (Filebeat/Fluentd/Vector/...)
-   |
-   v
-[NOT IMPLEMENTED] real SIEM (Splunk/Elastic Security/Sentinel/...)
+"security-events" SLF4J logger -> structured JSON line -> stdout (always, unconditionally)
+   |                                    |
+   |                                    +-> Logback SyslogAppender (this logger only,
+   |                                        additive - see logback-spring.xml in each module)
+   |                                            |
+   |                                            v
+   |                                     otel-collector's syslog receiver (UDP/RFC3164, :5514)
+   |                                            |
+   |                                            v
+   |                                     [today: `debug` exporter - printed, structurally parsed,
+   |                                      verifiable via `docker logs insurance-ai-otel-collector`]
+   |                                            |
+   |                                            v
+   |                                     [NOT IMPLEMENTED] real SIEM product (Splunk/Elastic
+   |                                      Security/Sentinel/...) - swapping the collector's log
+   |                                      exporter for `splunk_hec`/`elasticsearch`/any other
+   |                                      OTLP-logs-compatible exporter the same contrib collector
+   |                                      image already ships is the entire remaining migration -
+   |                                      zero application code, zero log format change.
 ```
 
-Every log line above the two `[NOT IMPLEMENTED]` steps is real: genuinely structured, genuinely
-emitted for every real occurrence of the event types below, and genuinely data-minimized (see
-`SecurityEvent`'s Javadoc). Nothing below that line exists. A deployment that wants a real SIEM
-needs to point a log collector at container stdout (or the `security-events` logger's own file/
-syslog appender, configured separately in log routing config) and ship it onward - that wiring is
-explicitly out of scope here, not silently assumed.
+Every step up to and including the collector's `debug` exporter is real: genuinely structured,
+genuinely emitted for every real occurrence of the event types below, genuinely data-minimized
+(see `SecurityEvent`'s Javadoc), and genuinely shipped over the network to a separate container -
+not merely described. Only the final hop (a real SIEM *product*) is `[NOT IMPLEMENTED]`, and that
+line is honest, not a hedge: no such product exists anywhere in this PoC's `docker-compose.yml`.
 
 ## 2. Why two separate loggers (backend and gateway)
 

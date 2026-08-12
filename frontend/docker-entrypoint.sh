@@ -26,12 +26,26 @@ EOF
 # (Angular Material's runtime style injection) - documented as a real, evaluated exception, not
 # an oversight. script-src stays 'self' only: this is an AOT-compiled Angular production build,
 # which needs neither 'unsafe-eval' nor 'unsafe-inline' for scripts.
+#
+# FASE 26 incident (found by the first real-browser E2E run): a CSP source expression whose path
+# does NOT end in "/" matches that ONE exact URL and nothing below it (CSP Level 3, "path part
+# match"). `PUBLIC_OIDC_ISSUER` is an issuer *base* (…/realms/insurance-ai) and every URL the app
+# actually calls is underneath it (…/realms/insurance-ai/.well-known/openid-configuration, the
+# token endpoint, …), so listing it verbatim allowed literally none of them. The browser blocked
+# the OIDC discovery request, the login flow could never start, and the deployed app was
+# unusable - while nginx, the container healthcheck, and every curl-based API check stayed green,
+# because none of them execute JavaScript or enforce CSP. A trailing slash is therefore required,
+# and appended here if the configured value lacks one.
 connect_src_extra=""
 if [ -n "${PUBLIC_API_BASE_URL}" ]; then
     connect_src_extra=" ${PUBLIC_API_BASE_URL}"
 fi
 if [ -n "${PUBLIC_OIDC_ISSUER}" ]; then
-    connect_src_extra="${connect_src_extra} ${PUBLIC_OIDC_ISSUER}"
+    case "${PUBLIC_OIDC_ISSUER}" in
+        */) oidc_connect_src="${PUBLIC_OIDC_ISSUER}" ;;
+        *)  oidc_connect_src="${PUBLIC_OIDC_ISSUER}/" ;;
+    esac
+    connect_src_extra="${connect_src_extra} ${oidc_connect_src}"
 fi
 
 cat > /etc/nginx/conf.d/csp-header.conf <<EOF

@@ -3,6 +3,15 @@
 **Fecha**: 2026-08-10
 **Alcance**: auditoría técnica independiente y remediación autónoma (FASE 14) del proyecto
 Insurance Knowledge Assistant, tras el cierre de FASE 0-13 (`FINAL_PROJECT_REPORT.md`).
+
+> **Nota de vigencia**: este documento es una fotografía del estado del proyecto en FASE 14 - no
+> se ha reescrito retroactivamente para reflejar fases posteriores. En particular, la sección 29
+> ("Remaining Production Gaps") lista "no IAM/authentication", "no API Gateway/rate limiting/WAF",
+> "no SIEM", "no distributed tracing beyond the custom `traceId`" - todos estos gaps fueron
+> cerrados en fases posteriores (FASE 16-25): ver `README.md`'s "Production Gap Analysis" (siempre
+> actualizado) para el estado real y vigente, `FINAL_SECURITY_OBSERVABILITY_AUDIT.md` para la
+> auditoría de seguridad/observabilidad más reciente, y `docs/observability/DISTRIBUTED_TRACING.md`
+> para el tracing distribuido real (FASE 25).
 **Metodología**: 7 agentes de auditoría independientes, cada uno con instrucciones explícitas de
 verificar el código real (no confiar en la documentación ni en el informe final previo), seguidos
 de remediación autónoma de los hallazgos CRITICAL/HIGH/MEDIUM correctibles y de los LOW seguros de

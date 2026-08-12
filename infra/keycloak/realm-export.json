@@ -27,10 +27,12 @@
         "pkce.code.challenge.method": "S256"
       },
       "redirectUris": [
+        "http://localhost:8000/*",
         "http://localhost:8083/*",
         "http://localhost:4200/*"
       ],
       "webOrigins": [
+        "http://localhost:8000",
         "http://localhost:8083",
         "http://localhost:4200"
       ]

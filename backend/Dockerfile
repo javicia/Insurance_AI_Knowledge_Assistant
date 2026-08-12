@@ -13,10 +13,17 @@ FROM eclipse-temurin:25-jdk-noble AS backend-build
 WORKDIR /app
 
 # Dependencies resolve from the manifest before any source is copied in, maximizing layer cache
-# reuse across rebuilds that don't touch dependencies.
+# reuse across rebuilds that don't touch dependencies. A BuildKit cache mount for ~/.m2 (not just
+# the image layer cache) is what actually matters here: a `pom.xml` change alone (e.g. adding a
+# new dependency, FASE 25) already invalidates the layer above regardless, so without a cache
+# mount every such change forces a full re-download of the entire dependency tree from Maven
+# Central - genuinely observed on this project taking over an hour and once failing outright on a
+# transient truncated download of a single large transitive jar (rocksdbjni, ~70MB). The cache
+# mount persists across builds independently of layer invalidation, turning "new dependency added"
+# back into "download one new jar", not "download everything again".
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN ./mvnw -B dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2,sharing=locked ./mvnw -B dependency:go-offline
 
 COPY src/ src/
 
@@ -27,7 +34,7 @@ COPY src/ src/
 # specific packaging step is a standard, documented build-time optimization, not a weakening of
 # the actual test suite - that verification already happened, and is re-run independently as part
 # of this same delivery.
-RUN ./mvnw -B clean package -DskipTests
+RUN --mount=type=cache,target=/root/.m2,sharing=locked ./mvnw -B clean package -DskipTests
 
 ########################################
 # Stage 2 - minimal runtime

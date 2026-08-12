@@ -76,13 +76,22 @@ form-action 'self';
   a real, evaluated exception (Angular Material injects some styles at runtime) - not blanket
   permissiveness; `script-src` has no equivalent exception.
 
-**Verification method and its limit**: verified via `curl -I` against the real running container,
-confirming the header is present with the deployment's real configured values substituted
-correctly - not verified by loading the app in an actual browser and checking the DevTools
-console/Network tab for CSP violation reports, since no browser-automation tool is available in
-this environment (the same documented limitation as `FINAL_FRONTEND_AUDIT.md` section 17's
-Playwright/Cypress gap, now partially closed by FASE 27's Playwright suite - see that report for
-what Playwright *did* newly verify here).
+**FASE 26: this CSP is now verified in a real browser - and it was broken.** It was previously
+checked only with `curl -I`, confirming the header was present and correctly substituted. That
+turned out to say nothing about whether it was *correct*. A real Chromium run (see
+`docs/testing/E2E_PLAYWRIGHT.md`) surfaced two defects a header inspection could never find:
+
+1. `script-src 'self'` blocked the inline `onload` handler that Angular's critical-CSS inlining
+   emits, so the deferred stylesheet never activated. Fixed by disabling `inlineCritical` in the
+   build - deliberately **not** by adding `'unsafe-inline'`/`'unsafe-hashes'`, which would have
+   weakened the policy to accommodate the build.
+2. `connect-src` listed the OIDC issuer **without a trailing slash**. Under CSP path-matching, a
+   source expression whose path does not end in `/` matches that one exact URL and nothing beneath
+   it - so `.well-known/openid-configuration` was blocked and **login could never start**. Fixed in
+   `docker-entrypoint.sh`, and now guarded by an E2E test asserting the issuer source ends in `/`.
+
+The lesson is recorded rather than quietly patched: a CSP can only be validated by an engine that
+enforces it.
 
 ## 4. Where responsibility for the WAF vs. the frontend divides
 

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
@@ -74,6 +75,35 @@ class GlobalExceptionHandlerTest {
         void validatedBodyEndpoint(
                 @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody StubValidatedBody body) {
             // exists only so a body failing bean validation throws MethodArgumentNotValidException
+        }
+
+        @GetMapping("/database-unavailable")
+        void databaseUnavailable() {
+            // Exactly what Spring throws when HikariCP cannot hand out a connection because the
+            // database is unreachable - see the handler's Javadoc for the measured incident.
+            throw new org.springframework.dao.DataAccessResourceFailureException(
+                    "Unable to acquire JDBC Connection");
+        }
+
+        @GetMapping("/transaction-unavailable")
+        void transactionUnavailable() {
+            throw new org.springframework.transaction.CannotCreateTransactionException(
+                    "Could not open JDBC Connection for transaction");
+        }
+
+        @GetMapping("/data-integrity-violation")
+        void dataIntegrityViolation() {
+            // Must NOT be treated as an outage: this is a data/logic fault, and reporting it as a
+            // transient 503 would tell clients to retry something that can never succeed.
+            throw new org.springframework.dao.DataIntegrityViolationException("duplicate key");
+        }
+
+        @org.springframework.web.bind.annotation.PostMapping("/required-params-endpoint")
+        void requiredParamsEndpoint(
+                @org.springframework.web.bind.annotation.RequestParam("name") String name,
+                @org.springframework.web.bind.annotation.RequestParam("count") int count) {
+            // mirrors POST /api/documents' real shape (required String + a non-String requiring
+            // conversion) so both the missing-parameter and the type-mismatch paths are reachable
         }
     }
 
@@ -191,6 +221,91 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(400, response.getStatus());
         assertTrue(response.getContentAsString().contains("VALIDATION_FAILED"));
+    }
+
+    /**
+     * FASE 26 resilience regression: with PostgreSQL genuinely stopped, a real request against the
+     * running Docker stack answered {@code 500 INTERNAL_ERROR}. An outage is a {@code 503}: the
+     * distinction is what tells a caller (and an upstream load balancer) that retrying is
+     * worthwhile.
+     */
+    @Test
+    void shouldMapDatabaseConnectionFailureTo503NotTheGeneric500() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(get("/database-unavailable")).andReturn().getResponse();
+
+        assertEquals(503, response.getStatus());
+        assertTrue(response.getContentAsString().contains("DATABASE_UNAVAILABLE"));
+    }
+
+    /** Same, for a connection failure raised while opening a transaction. */
+    @Test
+    void shouldMapCannotCreateTransactionTo503NotTheGeneric500() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(get("/transaction-unavailable")).andReturn().getResponse();
+
+        assertEquals(503, response.getStatus());
+        assertTrue(response.getContentAsString().contains("DATABASE_UNAVAILABLE"));
+    }
+
+    /**
+     * Guards the deliberate narrowness of the 503 mapping: a data-integrity fault is not a
+     * transient outage and must not invite a retry.
+     */
+    @Test
+    void shouldNotReportADataIntegrityViolationAsATransientOutage() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(get("/data-integrity-violation")).andReturn().getResponse();
+
+        assertEquals(500, response.getStatus());
+        assertFalse(response.getContentAsString().contains("DATABASE_UNAVAILABLE"));
+    }
+
+    /**
+     * FASE 25 E2E regression: {@code POST /api/documents} omitting the required {@code name}
+     * parameter really did answer {@code 500 INTERNAL_ERROR} against the running Docker stack.
+     */
+    @Test
+    void shouldMapMissingServletRequestParameterExceptionTo400NotTheGeneric500() throws Exception {
+        MockHttpServletResponse response = mockMvc
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/required-params-endpoint")
+                        .param("count", "1"))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        assertTrue(response.getContentAsString().contains("MISSING_REQUEST_PARAMETER"));
+    }
+
+    /** Same FASE 25 regression, for a parameter present but unconvertible to its declared type. */
+    @Test
+    void shouldMapMethodArgumentTypeMismatchExceptionTo400NotTheGeneric500() throws Exception {
+        MockHttpServletResponse response = mockMvc
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/required-params-endpoint")
+                        .param("name", "a-name")
+                        .param("count", "not-a-number"))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        assertTrue(response.getContentAsString().contains("INVALID_REQUEST_PARAMETER"));
+    }
+
+    /**
+     * Same FASE 25 regression family: the error body must never echo the caller's raw parameter
+     * value back (it is attacker-controlled input, and this project's error contract deliberately
+     * never reflects request content).
+     */
+    @Test
+    void shouldNotEchoTheOffendingParameterValueBackToTheClient() throws Exception {
+        MockHttpServletResponse response = mockMvc
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/required-params-endpoint")
+                        .param("name", "a-name")
+                        .param("count", "<script>alert(1)</script>"))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        assertFalse(response.getContentAsString().contains("script"),
+                "error body must not reflect attacker-controlled parameter values: "
+                        + response.getContentAsString());
     }
 
     @Test

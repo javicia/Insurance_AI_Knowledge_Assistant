@@ -100,3 +100,26 @@ management:
     health:
       probes:
         enabled: true
+
+# FASE 25 (Distributed Tracing): `otel.*`, not `management.tracing.*` - see backend/
+# application.yaml's identical comment for why (this project uses the OpenTelemetry-project-
+# maintained `opentelemetry-spring-boot-starter`, which reads this property namespace).
+otel:
+  service:
+    name: insurance-ai-gateway
+  exporter:
+    otlp:
+      endpoint: ${INSURANCE_AI_OTLP_ENDPOINT:http://localhost:4318}
+  traces:
+    sampler: always_on
+    # FASE 25: matches the backend's sampling choice - see that module's application.yaml for the
+    # full reasoning (every request sampled, a deliberate PoC choice, not a production default).
+  logs:
+    # See backend/application.yaml's identical comment - the starter's own OTLP log export is
+    # unused here (this project ships security events via syslog instead, docs/security/SIEM.md).
+    exporter: none
+  metrics:
+    # See backend/application.yaml's identical comment - no `metrics` pipeline exists in
+    # infra/otel/otel-collector-config.yaml, so the starter's default OTLP metrics export just
+    # produces periodic HTTP 404 noise against the collector's traces-only receiver.
+    exporter: none

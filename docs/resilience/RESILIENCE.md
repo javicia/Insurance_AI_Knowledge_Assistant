@@ -94,7 +94,67 @@ throws `PermanentProcessingException`; 429 and 408 specifically throw
 `GlobalExceptionHandlerTest`: `PermanentProcessingException` maps to `502` with its error code
 intact.
 
-## 7. Current limitations
+## 7. FASE 26: measured infrastructure-outage behaviour
+
+Everything above concerns the *LLM* call path. FASE 26 tested the other dependencies by genuinely
+stopping them against the running Docker stack and calling the real API through the WAF.
+
+### What was found
+
+| Scenario | Before | Root cause |
+|---|---|---|
+| PostgreSQL stopped, `POST /api/chat` | hung ~30s, caller got the WAF's opaque `504 Gateway Time-out` | HikariCP's default `connection-timeout` is 30s - not *below* the gateway's own 30s `response-timeout`, so the edge gave up first and the application's own error mapping never ran |
+| Kafka stopped, new document upload | hung, caller got `504` | the Kafka producer's default `max.block.ms` is 60s (it blocks awaiting cluster metadata), far beyond the gateway's 30s budget |
+| PostgreSQL stopped, after bounding the timeout | failed in ~15s but with a generic `500 INTERNAL_ERROR` | Spring raises `DataAccessResourceFailureException` / `CannotCreateTransactionException`, neither of which extends this project's `InfrastructureException`, so both fell through to the catch-all handler |
+
+### What changed
+
+- `spring.datasource.hikari.connection-timeout: 5000`
+- `spring.kafka.producer.properties.max.block.ms: 5000` (with matching `request.timeout.ms` /
+  `delivery.timeout.ms`)
+- `GlobalExceptionHandler` maps `DataAccessResourceFailureException` and
+  `CannotCreateTransactionException` to **`503 SERVICE_UNAVAILABLE`** with code
+  `DATABASE_UNAVAILABLE`
+
+The general principle: **every downstream timeout must be bounded comfortably below the edge's
+response timeout**, or outages surface as an opaque gateway `504` instead of the application's own
+meaningful, fast `503`. `500` versus `503` is not cosmetic - it is what tells a caller, a retry
+policy, and a load balancer whether retrying is worthwhile.
+
+The mapping is deliberately narrow: `DataIntegrityViolationException` is a data/logic fault and is
+explicitly *not* reported as a transient outage (regression-tested in
+`GlobalExceptionHandlerTest`).
+
+### Verified degradation matrix
+
+| Dependency stopped | Chat | Health | Notes |
+|---|---|---|---|
+| OTel Collector | **200** | UP | telemetry degrades to a no-op; business path untouched |
+| Jaeger | **200** | UP | idem |
+| Kafka | **200** | UP | chat does not depend on Kafka; only ingestion does |
+| PostgreSQL | **503** | 503 (DOWN) | correctly reported as unavailable, fast |
+| Keycloak | **401** | UP | fail-*closed*: signatures cannot be validated, so requests are refused rather than admitted. Correct security posture, at the cost of availability |
+
+All four services recovered cleanly on restart with no manual intervention (chat back to 200,
+health back to UP).
+
+### Open limitation: no transactional outbox
+
+Uploading a **new** document while Kafka is down persists the document and then fails to publish
+its event. The document is left in status `UPLOADED` **permanently** - nothing retries the publish
+once Kafka recovers. Reproduced and confirmed by querying the database directly after the failure.
+
+This is a genuine architectural gap, not a bug to be patched at the call site: the correct fix is a
+**transactional outbox** (write the event to an outbox table inside the same transaction as the
+document, and relay it asynchronously with retry). Consumer-side failures are already handled
+properly - `KafkaErrorHandlingConfiguration` provides retry with exponential backoff and a
+dead-letter topic - so the gap is specifically on the *producer* side.
+
+Until that exists, a stuck `UPLOADED` document must be re-uploaded. Documented rather than hidden,
+and deliberately not worked around with a partial retry that would create its own duplicate-event
+failure modes.
+
+## 8. Current limitations
 
 - No circuit breaker (e.g. resilience4j `CircuitBreaker`) - a PoC-scale, single-instance
   application talking to one configured provider does not yet have the traffic volume that a

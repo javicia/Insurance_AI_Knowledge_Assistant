@@ -2,13 +2,50 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
+    <!-- FASE 25 (Distributed Tracing): two distinct, deliberately separately-labelled IDs per
+         log line - trace_id/span_id (underscored - OpenTelemetry's own semantic-convention key
+         names, not this project's earlier camelCase guess, which never actually populated: see
+         below) are the real W3C-propagated OpenTelemetry identifiers, correlationId is the
+         legacy X-Trace-Id business correlation header (domain.shared.TraceId) - kept for
+         compatibility with existing audit/security-event correlation and any tooling that
+         already greps for it. See docs/observability/DISTRIBUTED_TRACING.md for why these are
+         not the same concept and must never share one MDC key (a real collision, found and fixed
+         in this same phase). -->
     <property name="CONSOLE_LOG_PATTERN"
-              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] [traceId=%X{traceId:-none}] %logger{36} - %msg%n"/>
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] [traceId=%X{trace_id:-none} spanId=%X{span_id:-none} correlationId=%X{correlationId:-none}] %logger{36} - %msg%n"/>
 
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <appender name="CONSOLE_PLAIN" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>${CONSOLE_LOG_PATTERN}</pattern>
         </encoder>
+    </appender>
+
+    <!-- FASE 25: a real bug found and fixed in this same phase - `opentelemetry-logback-mdc-1.0`
+         (backend/pom.xml) does NOT globally auto-populate MDC the way Micrometer Tracing's own
+         bridge does; it is itself a Logback *appender* that must be explicitly wired to wrap
+         whichever appender actually writes the log line, calling
+         `OpenTelemetryAppender.install(...)` under the hood (done automatically by Spring Boot's
+         `OpenTelemetryAppenderAutoConfiguration` once this appender exists in the config - no
+         manual `@Bean` needed for that part). Confirmed via real log output: `trace_id`/
+         `span_id` stayed empty until this wrapping was added, and populated correctly the moment
+         it was. -->
+    <appender name="CONSOLE" class="io.opentelemetry.instrumentation.logback.mdc.v1_0.OpenTelemetryAppender">
+        <appender-ref ref="CONSOLE_PLAIN"/>
+    </appender>
+
+    <!-- FASE B (SIEM pipeline, docs/security/SIEM.md): ships every "security-events" line to the
+         OTel Collector's syslog receiver, in addition to (not instead of) stdout - `additivity`
+         on the logger below stays true, so CONSOLE output is unchanged and this appender is
+         purely additive. Silently drops (does not crash the application) if the collector is
+         unreachable - Logback's SyslogAppender is fire-and-forget UDP, matching the same
+         best-effort/never-break-the-request philosophy SecurityEventLogger itself already
+         follows for its own internal failures (FASE 23). Host/port overridable for local
+         (non-Docker) development, where the collector isn't running - see README.md Option B. -->
+    <appender name="SECURITY_EVENTS_SYSLOG" class="ch.qos.logback.classic.net.SyslogAppender">
+        <syslogHost>${INSURANCE_AI_OTEL_SYSLOG_HOST:-localhost}</syslogHost>
+        <port>${INSURANCE_AI_OTEL_SYSLOG_PORT:-5514}</port>
+        <facility>LOCAL0</facility>
+        <suffixPattern>insurance-ai-backend: %msg</suffixPattern>
     </appender>
 
     <root level="INFO">
@@ -16,4 +53,8 @@
     </root>
 
     <logger name="com.rag.springai.insuranceai" level="INFO"/>
+
+    <logger name="security-events" level="WARN" additivity="true">
+        <appender-ref ref="SECURITY_EVENTS_SYSLOG"/>
+    </logger>
 </configuration>

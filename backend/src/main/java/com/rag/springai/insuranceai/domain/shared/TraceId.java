@@ -11,7 +11,17 @@ import java.util.UUID;
  */
 public record TraceId(String value) {
 
-    public static final String MDC_KEY = "traceId";
+    /**
+     * FASE 25 (Distributed Tracing): deliberately {@code "correlationId"}, not {@code "traceId"}
+     * - once real distributed tracing is on the classpath (Micrometer Tracing + OTel), Spring
+     * Boot auto-populates MDC keys {@code traceId}/{@code spanId} itself with the real W3C trace/
+     * span IDs. Reusing that same key name for this class's own header-propagated business
+     * correlation ID (the {@code X-Trace-Id} header - a distinct concept, see this class's own
+     * Javadoc) would silently collide: whichever mechanism writes to MDC last would win,
+     * non-deterministically shadowing the other in every log line. Kept as a separate field
+     * instead - {@code logback-spring.xml} logs both, explicitly labelled, side by side.
+     */
+    public static final String MDC_KEY = "correlationId";
 
     public TraceId {
         Objects.requireNonNull(value, "value must not be null");

@@ -17,14 +17,14 @@ import reactor.core.publisher.Mono;
  * generating a second, disconnected id, so a single trace id covers the client's full journey.
  *
  * <p><b>This is request correlation, not distributed tracing</b>: a single opaque ID threaded
- * through a custom header and SLF4J's MDC, not W3C {@code traceparent}/spans/OpenTelemetry. No
- * OpenTelemetry SDK, exporter, or collector exists anywhere in this codebase (verified: no
- * {@code micrometer-tracing}/{@code opentelemetry-*} dependency in either module's {@code
- * pom.xml}, no tracing config in either {@code application.yaml}) - see {@code
- * docs/observability/OBSERVABILITY.md}'s explicit Production Gap Analysis entry. A prior version
- * of this Javadoc claimed this was "superseded by full W3C traceparent propagation" citing a
- * {@code docs/observability/DISTRIBUTED_TRACING.md} that was never actually written - that claim
- * was false and has been removed.
+ * through a custom header ({@value #TRACE_ID_HEADER}) and SLF4J's MDC key {@code correlationId},
+ * not W3C {@code traceparent}/spans/OpenTelemetry. FASE 25 added a real, separate OpenTelemetry
+ * pipeline (SDK, OTel Collector, Jaeger - see {@code docs/observability/DISTRIBUTED_TRACING.md})
+ * with its own {@code trace_id}/{@code span_id} MDC keys - the two identifier systems exist
+ * deliberately side by side (see that document section 4 for exactly why they are not merged into
+ * one), not one superseding the other. This filter and its {@code X-Trace-Id} header are
+ * unaffected by FASE 25 and remain the business-facing correlation id returned to API clients
+ * (see the chat response's own {@code traceId} field).
  */
 @Component
 public class CorrelationIdGlobalFilter implements WebFilter, Ordered {

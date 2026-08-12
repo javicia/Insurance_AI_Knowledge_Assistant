@@ -53,6 +53,17 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/insurance_ai}
     username: ${POSTGRES_USER:insurance_ai}
     password: ${POSTGRES_PASSWORD:insurance_ai}
+    hikari:
+      # FASE 26 resilience finding, measured against the real stack: with PostgreSQL stopped, a
+      # POST /api/chat did not fail - it *hung*, and the caller eventually received an opaque
+      # `504 Gateway Time-out` from the WAF rather than this application's own, meaningful
+      # `503 SERVICE_UNAVAILABLE`. Cause: HikariCP's default connection-timeout is 30s, which is
+      # not below the gateway's own 30s response-timeout (gateway application.yaml), so the edge
+      # gave up first and the backend's InfrastructureException -> 503 mapping never got to run.
+      # 5s is comfortably inside that budget: a healthy local/VPC PostgreSQL connects in
+      # milliseconds, so this only ever trips when the database really is unreachable, and it
+      # then surfaces as a fast, correct 503 with a traceId the caller can quote.
+      connection-timeout: 5000
   flyway:
     enabled: true
   security:
@@ -69,6 +80,16 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # Same FASE 26 finding as spring.datasource.hikari.connection-timeout above, measured the
+        # same way: with Kafka stopped, uploading a new document hung and the caller got the WAF's
+        # `504 Gateway Time-out`. Cause: the producer's default `max.block.ms` is 60s (it blocks
+        # waiting for cluster metadata), far beyond the gateway's 30s response-timeout, so the
+        # edge always gave up first. Bounded well inside that budget so an unreachable broker
+        # surfaces as this application's own fast 503 instead.
+        max.block.ms: 5000
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
     consumer:
       group-id: insurance-ai-document-processor
       auto-offset-reset: earliest
@@ -82,6 +103,16 @@ spring:
         # arbitrary classes from untrusted producers (brief section 19's spirit applied to
         # messaging, not just LLM input).
         spring.json.trusted.packages: com.rag.springai.insuranceai.adapters.shared.messaging
+    template:
+      # FASE 25: emits a real producer span (Observation API) around every KafkaTemplate#send -
+      # DocumentEventPublisher's Kafka publish now participates in the same trace as the HTTP
+      # request that triggered it, not a disconnected background operation.
+      observation-enabled: true
+    listener:
+      # FASE 25: emits a real consumer span around every @KafkaListener invocation, with the
+      # producer's trace context propagated via the message headers (W3C traceparent), not
+      # restarted as a new, unrelated trace.
+      observation-enabled: true
 
 insurance-ai:
   rag:
@@ -95,11 +126,28 @@ insurance-ai:
       similarity-threshold: 0.75
     lexical:
       top-k: 8
-      # FASE 14 audit remediation (ADR-012): 0.0 preserves FASE 6-13 behaviour exactly (any
-      # PostgreSQL @@ match counts as grounding evidence). Not scientifically calibrated - a
-      # production deployment must raise this once real ts_rank_cd distributions from its own
-      # corpus have been observed. See docs/rag/HYBRID_SEARCH.md.
-      min-rank: 0.0
+      # FASE 26: calibrated against REAL ts_rank_cd distributions measured on the ingested corpus
+      # (the exact query in calibrate_lexical_min_rank.sql, run against the live database), which
+      # replaced the previous uncalibrated 0.0 placeholder. Measured, 14 questions:
+      #
+      #   out-of-corpus (6/6): ZERO matching chunks - rank never even computed
+      #   in-corpus     (6/8): 1-2 matching chunks, ts_rank_cd from 0.0909 to 0.375
+      #
+      # The measurement's most important finding is that this threshold is NOT what separates
+      # grounded from ungrounded: `websearch_to_tsquery` is AND-semantics, so a question
+      # containing any term absent from the corpus fails `content_tsv @@ query` outright and
+      # produces no row to rank. Every out-of-corpus question was rejected by the match operator
+      # itself, at any threshold. Raising this value can therefore only ever remove TRUE
+      # positives - anything above the measured 0.0909 floor would start refusing genuine
+      # evidence.
+      #
+      # 0.05 is chosen deliberately below that floor (1.8x margin against the weakest real match
+      # observed), so it changes no measured outcome today, while still rejecting a degenerate
+      # rank-0.0 match and giving defence in depth if the matching semantics are ever loosened
+      # (e.g. a switch to OR-semantics `to_tsquery`, under which weak partial matches WOULD start
+      # arriving and this threshold would become load-bearing). Re-measure before assuming these
+      # numbers hold for a different corpus. See docs/rag/HYBRID_SEARCH.md.
+      min-rank: 0.05
     hybrid:
       # Candidates carried into reranking, before the final-top-k cut.
       candidate-pool-size: 20
@@ -157,3 +205,44 @@ management:
       # Never leak DB/Kafka connection details in an unauthenticated response (Boot's own
       # default - kept explicit here so it is not accidentally loosened to "always").
       show-details: never
+
+# FASE 25 (Distributed Tracing): `otel.*`, not `management.tracing.*`/`management.otlp.tracing.*`
+# - this project uses the OpenTelemetry-project-maintained `opentelemetry-spring-boot-starter`
+# (see backend/pom.xml's comment for the full incident: Spring Boot 4.1.0's own native tracing
+# auto-configuration module produces no real `Tracer` bean, confirmed via `/actuator/conditions`),
+# which reads this property namespace (and the equivalent `OTEL_*` env vars), not Spring's.
+otel:
+  service:
+    name: insurance-ai-backend
+  exporter:
+    otlp:
+      # Base endpoint, no `/v1/traces` suffix - the SDK autoconfigure module appends the correct
+      # per-signal path itself. The otel-collector service (docker-compose.yml) - never a direct
+      # vendor SDK dependency (Jaeger today, swappable for any OTLP-compatible backend by
+      # reconfiguring the collector alone, no application code change). Overridable for local
+      # (non-Docker) development, where the collector isn't running - see Option B in README.md.
+      endpoint: ${INSURANCE_AI_OTLP_ENDPOINT:http://localhost:4318}
+  traces:
+    sampler: always_on
+    # FASE 25: every request sampled is a deliberate PoC choice, not a production default - a
+    # real deployment would use `parentbased_traceidratio` with a fraction (e.g. 0.1) plus
+    # always-sample-on-error, to bound collector/storage volume. See
+    # docs/observability/DISTRIBUTED_TRACING.md.
+  logs:
+    # The starter's own OTLP *log* export is a separate, unused feature from this project's own
+    # syslog-based security-event pipeline (docs/security/SIEM.md) - left enabled it periodically
+    # logs harmless-but-noisy HTTP 404 warnings (the collector only exposes a /v1/traces receiver,
+    # see infra/otel/otel-collector-config.yaml), since nothing consumes a /v1/logs endpoint here.
+    # Explicitly disabled rather than left silently noisy - see
+    # docs/observability/DISTRIBUTED_TRACING.md section 9.
+    exporter: none
+  metrics:
+    # Same reasoning as `otel.logs.exporter` above, found during the same FASE 25 backend
+    # `clean verify` run: the starter also auto-exports OTLP metrics every ~30s by default, and
+    # the collector config has no `metrics` pipeline (only `traces`/`logs`) - left enabled it
+    # produces the identical "Failed to export metrics ... HTTP 404" noise every ~30s. No
+    # metrics pipeline exists in infra/otel/otel-collector-config.yaml because this PoC's
+    # observability scope is traces + security-event logs only (see
+    # docs/observability/DISTRIBUTED_TRACING.md) - a real metrics pipeline (Prometheus scrape or
+    # OTLP metrics receiver) is out of scope, not an oversight.
+    exporter: none
