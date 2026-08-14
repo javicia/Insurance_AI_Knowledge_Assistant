@@ -9,7 +9,7 @@ import java.util.HexFormat;
 import java.util.Objects;
 
 /**
- * Aggregate root of the Prompt Registry (brief FASE 9 section 10/24): versioned, auditable
+ * Aggregate root of the Prompt Registry: versioned, auditable
  * prompt content, replacing the FASE 5 hardcoded {@code InsuranceRagSystemPrompt} constant (see
  * {@code AskInsuranceKnowledgeUseCase}, which now resolves the active prompt for {@code
  * promptKey} through {@code PromptRepository} instead of referencing that constant directly).

@@ -18,7 +18,7 @@
     )
   );
 
-  // Restrained enterprise palette (brief FASE 15 section 7) - a sober slate/blue, not a
+  // Restrained enterprise palette - a sober slate/blue, not a
   // generic Material demo purple, without hand-rolling a full custom M3 palette.
   --app-color-background: #f6f7f9;
   --app-color-surface: #ffffff;
@@ -28,7 +28,7 @@
   --app-color-text-secondary: #5b6472;
   // #6b7280 rather than a lighter gray - WCAG AA requires >= 4.5:1 contrast for normal text on
   // white; this tone reaches ~4.6:1, a genuinely accessible "muted" rather than a decorative-only
-  // gray (brief FASE 15 section 26).
+  // gray.
   --app-color-text-muted: #6b7280;
   --app-color-accent: #0f4c81;
   --app-color-accent-soft: #e8f0f8;

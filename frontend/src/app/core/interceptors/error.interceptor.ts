@@ -17,7 +17,7 @@ function isErrorResponseShape(body: unknown): body is ErrorResponse {
 
 /**
  * User-facing fallback messages for HTTP statuses whose body did not match {@link ErrorResponse}
- * (brief FASE 15 section 25) - covers both genuine transport failures (status 0, a proxy/network
+ * - covers both genuine transport failures (status 0, a proxy/network
  * error with no JSON body at all) and any endpoint whose failure bypasses GlobalExceptionHandler
  * (e.g. a malformed query parameter rejected by Spring's own default error handling, which
  * returns a differently-shaped body). GlobalExceptionHandler-produced errors (422/502/503/500)
@@ -41,7 +41,7 @@ const FALLBACK_MESSAGES: Readonly<Record<number, string>> = {
 };
 
 /**
- * Normalizes every failed HTTP call into an {@link ApiError} (brief FASE 15 section 25) - never
+ * Normalizes every failed HTTP call into an {@link ApiError} - never
  * a raw stack trace, Java exception name, or SQL error reaches a component, whether the failure
  * came from GlobalExceptionHandler's real {@link ErrorResponse} contract or a transport-level
  * failure that never reached the backend at all.

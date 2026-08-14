@@ -11,7 +11,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 /**
- * FASE 25 (Distributed Tracing) incident fix: manually injects the W3C {@code traceparent}/
+ * (Distributed Tracing) incident fix: manually injects the W3C {@code traceparent}/
  * {@code tracestate} headers onto the outbound request before Spring Cloud Gateway's built-in
  * {@code NettyRoutingFilter} proxies it to the backend, so the backend continues the gateway's
  * trace instead of starting a disconnected one.

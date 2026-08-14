@@ -8,9 +8,9 @@ import type { HealthState } from '../models/health.model';
 const HEALTH_POLL_INTERVAL_MS = 30_000;
 
 /**
- * Backs the header/sidebar "AI System status" indicator (brief FASE 15 section 8/9) with the
+ * Backs the header/sidebar "AI System status" indicator with the
  * real `GET /actuator/health` result, polled periodically - never a hardcoded "Operational"
- * claim (brief section 63). The active provider is read once from the real Model Registry
+ * claim. The active provider is read once from the real Model Registry
  * (`GET /api/governance/ai-systems/{id}/models`) rather than invented.
  */
 @Injectable({ providedIn: 'root' })

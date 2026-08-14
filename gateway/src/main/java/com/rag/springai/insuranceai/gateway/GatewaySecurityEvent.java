@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * FASE 23: the gateway's own structured security event, deliberately field-compatible with the
+ * The gateway's own structured security event, deliberately field-compatible with the
  * backend's {@code com.rag.springai.insuranceai.domain.security.SecurityEvent} (same ECS-inspired
  * field names, same data-minimization contract - see that class's Javadoc) but not the *same*
  * type: the gateway is a separate Maven module/deployable with no dependency on the backend's

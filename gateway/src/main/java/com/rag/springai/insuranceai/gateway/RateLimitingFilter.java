@@ -23,7 +23,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 /**
- * FASE 21: real per-identity, per-route rate limiting (brief: "limite por identidad autenticada",
+ * Real per-identity, per-route rate limiting (brief: "limite por identidad autenticada",
  * "limites diferentes para endpoints sensibles", "no implementes un contador global ingenuo").
  * Each {@code (subject, route)} pair gets its own token bucket - a burst-tolerant, steadily-
  * refilling limit, not a fixed window counter that resets unfairly at a boundary.

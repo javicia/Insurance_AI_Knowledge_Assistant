@@ -11,7 +11,7 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 /**
- * FASE 19: assigns {@code X-Trace-Id} at the true edge of the system if the client didn't supply
+ * Assigns {@code X-Trace-Id} at the true edge of the system if the client didn't supply
  * one, so correlation covers the gateway hop too, not just backend-internal processing - the
  * backend's own {@code TraceIdFilter} (unchanged) reuses whatever value it receives rather than
  * generating a second, disconnected id, so a single trace id covers the client's full journey.

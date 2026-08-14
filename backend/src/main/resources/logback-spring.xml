@@ -2,7 +2,7 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <!-- FASE 25 (Distributed Tracing): two distinct, deliberately separately-labelled IDs per
+    <!-- Two distinct, deliberately separately-labelled IDs per
          log line - trace_id/span_id (underscored - OpenTelemetry's own semantic-convention key
          names, not this project's earlier camelCase guess, which never actually populated: see
          below) are the real W3C-propagated OpenTelemetry identifiers, correlationId is the
@@ -20,7 +20,7 @@
         </encoder>
     </appender>
 
-    <!-- FASE 25: a real bug found and fixed in this same phase - `opentelemetry-logback-mdc-1.0`
+    <!-- A real bug found and fixed in this same phase - `opentelemetry-logback-mdc-1.0`
          (backend/pom.xml) does NOT globally auto-populate MDC the way Micrometer Tracing's own
          bridge does; it is itself a Logback *appender* that must be explicitly wired to wrap
          whichever appender actually writes the log line, calling
@@ -33,7 +33,7 @@
         <appender-ref ref="CONSOLE_PLAIN"/>
     </appender>
 
-    <!-- FASE B (SIEM pipeline, docs/security/SIEM.md): ships every "security-events" line to the
+    <!-- (SIEM pipeline, docs/security/SIEM.md): ships every "security-events" line to the
          OTel Collector's syslog receiver, in addition to (not instead of) stdout - `additivity`
          on the logger below stays true, so CONSOLE output is unchanged and this appender is
          purely additive. Silently drops (does not crash the application) if the collector is

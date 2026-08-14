@@ -18,7 +18,7 @@ window.__env = {
 };
 EOF
 
-# FASE 32: Content-Security-Policy, generated here (not hardcoded in nginx.conf) because
+# Content-Security-Policy, generated here (not hardcoded in nginx.conf) because
 # connect-src must reference this deployment's real PUBLIC_API_BASE_URL - an empty value (local
 # dev / same-origin) needs no extra entry beyond 'self'; a configured absolute URL (the WAF/
 # gateway address in Docker) is appended explicitly. style-src/font-src allow Google Fonts (the
@@ -27,7 +27,7 @@ EOF
 # an oversight. script-src stays 'self' only: this is an AOT-compiled Angular production build,
 # which needs neither 'unsafe-eval' nor 'unsafe-inline' for scripts.
 #
-# FASE 26 incident (found by the first real-browser E2E run): a CSP source expression whose path
+# Incident (found by the first real-browser E2E run): a CSP source expression whose path
 # does NOT end in "/" matches that ONE exact URL and nothing below it (CSP Level 3, "path part
 # match"). `PUBLIC_OIDC_ISSUER` is an issuer *base* (…/realms/insurance-ai) and every URL the app
 # actually calls is underneath it (…/realms/insurance-ai/.well-known/openid-configuration, the

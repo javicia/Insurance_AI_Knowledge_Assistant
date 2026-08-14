@@ -1,0 +1,61 @@
+# Overlay for running the SPANISH FUNCTIONAL TEST CORPUS (test-data/insurance/auto) against the
+# offline `fake` provider.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.corpus-es.yml up -d backend
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# `FakeEmbeddingModelAdapter` is a bag-of-words feature-hashing stand-in, not a language model. Its
+# cosine similarities are distributed far lower than a real embedding model's, and they never reach
+# the production threshold `insurance-ai.rag.semantic.similarity-threshold: 0.75`. Measured against
+# the ingested Spanish corpus, a correct, answerable question produced:
+#
+#     semanticCandidates=0  lexicalCandidates=0  finalCandidates=0     (threshold 0.75)
+#     semanticCandidates=8  lexicalCandidates=0  finalCandidates=8     (threshold 0.35)
+#
+# and at 0.35 the answer returned was the correct one, correctly cited. The lexical branch
+# contributes almost nothing here for a second, independent reason: `content_tsv` is generated with
+# PostgreSQL's `english` configuration, so Spanish stopwords are NOT removed and
+# `websearch_to_tsquery`'s AND-semantics then require every one of them to be present -
+# "¿Cuál es el límite de granizo?" becomes `'cuál' & 'es' & 'el' & 'límite' & 'de' & 'granizo'`,
+# which matches no chunk at all.
+#
+# So the production defaults are not "wrong" - they are calibrated for a real embedding model over
+# an English corpus. This overlay makes the Spanish corpus usable with the offline provider, and
+# CHANGES NOTHING for a normal deployment, which never loads this file.
+#
+# CALIBRATION - MEASURED, NOT GUESSED
+# -----------------------------------
+# The value below was chosen by running the same 22-case representative sample
+# (scripts/run_functional_probe.py) against the live stack at four thresholds:
+#
+#   threshold | aciertos | falsos negativos | falsos positivos
+#             |          | (GROUNDED perdido)| (no-answer respondido)
+#   ----------+----------+-------------------+----------------------
+#     0.75    |   9/22   |        9          |         0
+#     0.55    |  15/22   |        7          |         0
+#     0.45    |  18/22   |        2          |         1   <-- elegido
+#     0.35    |  15/22   |        1          |         4
+#
+# 0.45 is the empirical optimum for THIS corpus with THIS offline provider. Note the shape of the
+# curve: raising the threshold protects the no-answer policy (the safety-critical property) at the
+# cost of recall, and lowering it does the reverse. There is no value that scores perfectly,
+# which is itself the finding - see the caveat below.
+#
+# THE HONEST CAVEAT
+# -----------------
+# Use this overlay to exercise the PLUMBING - ingestion, retrieval, citations, guardrails,
+# auditing, tracing - and do NOT use it to judge RAG answer quality: the trade-off above is an
+# artefact of the bag-of-words stand-in, not a property of the design. For a genuine quality
+# assessment run the stack against a real embedding provider and leave the 0.75 production
+# threshold untouched:
+#
+#   INSURANCE_AI_PROVIDER=openai OPENAI_API_KEY=... docker compose up -d backend
+#
+# See docs/testing/GUIA_PRUEBAS_FUNCIONALES_ES.md section 9 and
+# docs/testing/INSURANCE_AUTO_TEST_CORPUS_REPORT_ES.md for the full measurements.
+
+services:
+  backend:
+    environment:
+      INSURANCE_AI_RAG_SEMANTIC_SIMILARITY_THRESHOLD: "0.45"

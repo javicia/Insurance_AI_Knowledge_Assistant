@@ -5,7 +5,7 @@ import com.rag.springai.insuranceai.domain.aisystem.AiSystemId;
 import java.util.Objects;
 
 /**
- * Aggregate root of the Model Registry (brief FASE 9 section 10): which provider/model
+ * Aggregate root of the Model Registry: which provider/model
  * combinations are allowed to back an {@link com.rag.springai.insuranceai.domain.aisystem.AiSystem}
  * (an allow-list, brief section 13), independent of {@code EmbeddingModelPort}/{@code
  * LlmProvider}'s own runtime adapter selection - this is the governance record of the decision,

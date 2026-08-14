@@ -4,7 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 /**
- * The question input (brief FASE 15 section 10/43): Enter sends, Shift+Enter inserts a newline,
+ * The question input: Enter sends, Shift+Enter inserts a newline,
  * disabled while a request is in flight so a user cannot accidentally fire concurrent requests.
  */
 @Component({

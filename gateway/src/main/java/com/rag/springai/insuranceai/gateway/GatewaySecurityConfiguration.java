@@ -17,7 +17,7 @@ import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
 /**
- * FASE 19: the gateway independently validates JWTs too - defense in depth (brief: "validacion
+ * The gateway independently validates JWTs too - defense in depth (brief: "validacion
  * JWT si corresponde arquitectonicamente"). A request the gateway itself already knows carries no
  * valid token never reaches the backend at all; the backend (FASE 17) still independently
  * re-validates every request it does receive and applies the real fine-grained per-endpoint

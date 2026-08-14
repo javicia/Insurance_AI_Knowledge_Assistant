@@ -199,6 +199,23 @@ how per-test isolation is achieved without starting a new container per test cla
 backend directly - including the six real deployment defects that decision surfaced, none of which
 any non-browser check could see.
 
+**Corpus funcional en español** (`test-data/insurance/auto/`) - 25 documentos ficticios de seguro
+de automóvil (115 páginas, ~48.000 palabras) y 247 casos de prueba, para ejercitar el pipeline RAG
+con documentación realista en lugar de fixtures de una frase:
+
+```bash
+python scripts/build_test_corpus_pdfs.py --check   # Markdown -> PDF, verifica la extracción
+bash scripts/ingest_test_corpus.sh                 # ingesta real a través del WAF
+python scripts/validate_test_corpus.py             # consistencia del corpus y del dataset
+python scripts/run_functional_probe.py             # ejecuta casos contra el stack
+```
+
+Guía completa en español: `docs/testing/GUIA_PRUEBAS_FUNCIONALES_ES.md`. El corpus destapó un fallo
+de seguridad real - el guardarraíl de inyección de prompts sólo tenía patrones en inglés, así que
+las inyecciones en español lo atravesaban - y documenta con mediciones por qué el proveedor
+offline `fake` no alcanza el umbral semántico de producción; ver
+`docs/testing/INSURANCE_AUTO_TEST_CORPUS_REPORT_ES.md`.
+
 ## API overview
 
 | Base path | Purpose |

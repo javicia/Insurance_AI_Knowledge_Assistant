@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * FASE 23: the gateway-side counterpart of the backend's {@code SecurityEventLogger} - same
+ * The gateway-side counterpart of the backend's {@code SecurityEventLogger} - same
  * dedicated {@code "security-events"} logger name (so log routing config can treat both
  * uniformly), same hand-built-JSON reasoning (see that class's Javadoc), same honest boundary:
  * structured JSON to stdout only, no SIEM/collector wired up in this PoC (see

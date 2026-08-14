@@ -6,7 +6,7 @@ import { ACTUATOR_BASE_URL } from '../config/api.config';
 import type { HealthResponse, HealthState } from '../models/health.model';
 
 /**
- * Consumes exactly `GET /actuator/health` (spring-boot-starter-actuator, FASE 11) - the header
+ * Consumes exactly `GET /actuator/health` (spring-boot-starter-actuator) - the header
  * status indicator (brief FASE 15 section 9) reflects this real check, never an assumed/hardcoded
  * "operational" claim (brief section 63).
  */

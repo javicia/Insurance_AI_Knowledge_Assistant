@@ -7,7 +7,7 @@ import { TraceContextService } from '../services/trace-context.service';
 
 /**
  * Captures the `X-Trace-Id` response header (echoed by TraceIdFilter on every request, brief
- * FASE 15 section 6) into {@link TraceContextService}, so a technical-details panel can offer a
+ *  into {@link TraceContextService}, so a technical-details panel can offer a
  * trace id even for a response whose body could not be parsed as JSON.
  */
 export const traceInterceptor: HttpInterceptorFn = (req, next) => {

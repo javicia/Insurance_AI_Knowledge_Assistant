@@ -1,5 +1,5 @@
 /**
- * FASE 16 (frontend/backend separation, brief section 47): the frontend is now an independent
+ *(frontend/backend separation, brief section 47): the frontend is now an independent
  * deployable that knows only `PUBLIC_API_BASE_URL` - never a database URL, Kafka URL, LLM
  * credential, or internal service URL. That value is injected at container startup (never baked
  * into the build, see `docker-entrypoint.sh` and `public/env.js`) as `window.__env
@@ -12,7 +12,7 @@ declare global {
   interface Window {
     __env?: {
       PUBLIC_API_BASE_URL?: string;
-      /** FASE 18 - see oidc.config.ts for how these two are used. */
+      /** See oidc.config.ts for how these two are used. */
       PUBLIC_OIDC_ISSUER?: string;
       PUBLIC_OIDC_CLIENT_ID?: string;
     };

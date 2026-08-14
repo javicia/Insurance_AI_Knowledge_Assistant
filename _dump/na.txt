@@ -1,0 +1,52 @@
+FT-106 | ¿Cuánto cuesta asegurar un Volkswagen Golf GTI matriculado en 2021 en Valladolid? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-107 | ¿Qué prima mensual pagaría un cliente de 40 años por un Tesla Model 3 fabricado en Shanghái? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-108 | Dame una cotización exacta para un Renault Clio del año 2018. | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-109 | ¿Cuál es el horario de apertura del taller concertado de la calle Gran Vía? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-110 | ¿Qué sucursales abren los sábados por la tarde? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-111 | ¿Hay citas disponibles para peritaje el próximo martes por la mañana? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-112 | ¿Qué compañía es más barata, Mapfre o Línea Directa? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-113 | ¿Cómo se compara vuestra tarifa exacta con la de la competencia? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-114 | ¿Cuánto cuesta la multa por circular con la ITV caducada en Andalucía? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-115 | ¿Cuántos puntos del carnet se pierden por utilizar el móvil al volante? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-116 | ¿Cuál es el saldo de puntos del carnet del cliente número 4587 en el fichero de la jefatura provincial? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-117 | ¿Cuántos clientes tiene la compañía en la provincia de Cuenca? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-118 | ¿Cuál fue el beneficio neto del grupo en el último trimestre? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-119 | ¿Qué dividendo reparte la aseguradora a sus accionistas este año? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-120 | ¿A cuánto cotiza hoy en bolsa la matriz del grupo asegurador? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-121 | ¿Cuál es la nómina media de un tramitador de siniestros de la plantilla? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-122 | ¿Cuántos días de vacaciones tiene el personal de la oficina de Sevilla? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-123 | ¿Qué política interna de teletrabajo aplica el departamento de recursos humanos? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-124 | ¿Cómo se solicita una excedencia laboral en la empresa? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-125 | ¿Qué cubre el seguro de hogar frente a la rotura de una tubería? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-126 | ¿Cuánto capital garantiza un seguro de vida vinculado a una hipoteca? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-127 | ¿El seguro de salud incluye tratamientos de ortodoncia dental? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-128 | ¿Qué cubre el seguro de decesos que contrataron mis padres? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-129 | ¿Ofrecéis seguros para embarcaciones de recreo? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-130 | ¿Aseguráis motocicletas de más de 500 centímetros cúbicos? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-131 | ¿Qué tarifa exacta tiene el seguro de un tractor agrícola? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-132 | ¿Cuál es el número de cuenta bancaria donde se domicilian los recibos de la compañía? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-133 | ¿Cuál es la contraseña del área privada de clientes? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-134 | ¿Qué versión de base de datos utiliza vuestro sistema informático? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-135 | ¿Qué proveedor de telefonía usa el centro de atención telefónica? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-136 | ¿Cuál es el ranking de satisfacción del sector asegurador español en 2026? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-137 | ¿Qué previsión de inflación maneja la compañía para el próximo ejercicio? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-138 | ¿Cuánto cuesta el mantenimiento oficial de un Peugeot 308 a los 60.000 kilómetros? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-139 | ¿Qué modelo de coche me recomiendas comprar con un presupuesto de 15.000 euros? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-140 | ¿Cuál es el consumo homologado de un Toyota Corolla híbrido? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-141 | ¿Dónde está la gasolinera más barata de Madrid? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-142 | ¿Qué tiempo hará mañana en Barcelona? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-143 | ¿Cuál es la receta tradicional de la paella valenciana? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-144 | ¿Quién ganó la última edición del campeonato de Fórmula 1? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-145 | ¿Cuántos habitantes tiene la ciudad de Zaragoza? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-146 | ¿Cómo se traduce la palabra franquicia al idioma alemán? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-147 | ¿Qué descuento aplicáis si contrato a través de la aplicación móvil? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-148 | ¿Puedo pagar la prima con criptomonedas? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-149 | ¿Cuál es el tipo de interés del préstamo para financiar la compra del coche? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media
+FT-150 | ¿Qué campañas publicitarias tiene previstas la compañía este verano? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-151 | ¿Cuántos empleados trabajan en el departamento de marketing? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-152 | ¿Qué certificaciones ISO tiene la sede corporativa? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-153 | ¿Cuál es el organigrama del comité de dirección? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-154 | ¿Cuándo se celebra la próxima junta general de accionistas? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-155 | ¿Qué presupuesto destina la compañía a patrocinios deportivos? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: baja
+FT-156 | ¿Cuál es la tarifa exacta para un conductor con dos siniestros en el último año? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: alta
+FT-157 | ¿Qué comisión cobra el corredor de seguros por cada póliza intermediada? | EXP: No hay información suficiente en la documentación disponible. | GR: NO_ANSWER | DOC:  | CAT: no-answer | DIF: media

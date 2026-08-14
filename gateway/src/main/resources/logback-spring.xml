@@ -2,7 +2,7 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <!-- FASE 25 (Distributed Tracing): trace_id/span_id (underscored - OpenTelemetry's own
+    <!-- (Distributed Tracing): trace_id/span_id (underscored - OpenTelemetry's own
          semantic-convention MDC key names; see backend/logback-spring.xml's identical comment for
          the real bug this reflects). "none" only appears if tracing itself is disabled/
          misconfigured. See docs/observability/DISTRIBUTED_TRACING.md. -->
@@ -15,7 +15,7 @@
         </encoder>
     </appender>
 
-    <!-- FASE 25: wraps CONSOLE_PLAIN so OpenTelemetryAppender can populate trace_id/span_id
+    <!-- (Distributed Tracing): wraps CONSOLE_PLAIN so OpenTelemetryAppender can populate trace_id/span_id
          before the line is written - see backend/logback-spring.xml's identical comment for why
          this explicit wrapping is required (opentelemetry-logback-mdc-1.0 does not auto-populate
          MDC globally on its own). -->
@@ -23,7 +23,7 @@
         <appender-ref ref="CONSOLE_PLAIN"/>
     </appender>
 
-    <!-- FASE B (SIEM pipeline) - identical reasoning to the backend's own logback-spring.xml,
+    <!-- (SIEM pipeline) - identical reasoning to the backend's own logback-spring.xml,
          see that file's comment. Ships GatewaySecurityEventLogger's RATE_LIMIT_EXCEEDED lines
          alongside the backend's security events into the same collector/sink. -->
     <appender name="SECURITY_EVENTS_SYSLOG" class="ch.qos.logback.classic.net.SyslogAppender">

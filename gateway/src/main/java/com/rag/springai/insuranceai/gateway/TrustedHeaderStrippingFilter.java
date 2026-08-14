@@ -11,7 +11,7 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 /**
- * FASE 19 (brief: "El cliente NO debe poder falsificar X-User, X-Roles, X-Principal,
+ * (brief: "El cliente NO debe poder falsificar X-User, X-Roles, X-Principal,
  * X-Authenticated-User. Si esos headers existen, deben eliminarse antes de llegar al backend").
  *
  * <p>Today nothing downstream trusts these headers at all (the backend independently validates
