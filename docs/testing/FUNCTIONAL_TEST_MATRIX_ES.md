@@ -5,14 +5,14 @@ ejecución**: se rellena la columna `Estado` durante cada campaña de pruebas y 
 resultante es la evidencia de la campaña.
 
 Los casos de las áreas de RAG (3 a 9) proceden del dataset real
-`docs/testing/evaluation_dataset.csv` (247 casos) y conservan su **identificador `FT-xxx` y su
+`docs/testing/evaluation_dataset.csv` (255 casos) y conservan su **identificador `FT-xxx` y su
 pregunta literal**. Los casos que no forman parte del dataset (infraestructura, ingestión,
 autenticación, autorización, edge, observabilidad, errores y frontend) llevan prefijo propio.
 
 ## Cómo se usa
 
 1. Levantar el stack y esperar a que los servicios expongan salud (`docker compose up -d --build`).
-2. Ingerir el corpus (`bash scripts/ingest_test_corpus.sh`), 25 documentos hasta `EMBEDDED`.
+2. Ingerir el corpus (`bash scripts/ingest_test_corpus.sh`), 26 documentos hasta `EMBEDDED`.
 3. Obtener token del usuario indicado en la precondición (ver `GUIA_PRUEBAS_FUNCIONALES_ES.md` §6).
 4. Ejecutar los casos **siempre a través del WAF** (`http://localhost:8000`). Atacar directamente
    al backend (`:8080`) o al gateway (`:8082`) invalida la prueba.
@@ -68,8 +68,8 @@ autenticación, autorización, edge, observabilidad, errores y frontend) llevan 
 | ING-02 | Ingestión | `GET /api/documents/{id}` inmediatamente tras la subida | ING-01 ejecutado | `versions[0].status = UPLOADED`: el fichero está persistido antes de procesarse | N/A | N/A | - | P2 | PENDIENTE |
 | ING-03 | Ingestión | `GET /api/documents/{id}` tras la extracción y el chunking | ING-02 ejecutado | `versions[0].status = PROCESSED`, con el texto extraído y fragmentado | N/A | N/A | - | P2 | PENDIENTE |
 | ING-04 | Ingestión | `GET /api/documents/{id}` tras el cálculo de embeddings | ING-03 ejecutado | `versions[0].status = EMBEDDED`. La progresión completa es `UPLOADED → PROCESSED → EMBEDDED` (o `FAILED`) | N/A | N/A | - | P1 | PENDIENTE |
-| ING-05 | Ingestión | `bash scripts/ingest_test_corpus.sh` (corpus completo) | Stack arriba, PDFs generados | `25 document(s) ingested and EMBEDDED, 0 failed`. El script respeta el `Retry-After` del límite de 10/min y renueva el token al caducar | N/A | N/A | - | P1 | PENDIENTE |
-| ING-06 | Ingestión | `select count(*) from document_chunks;` | Corpus ingerido | Recuento de fragmentos mayor que cero y coherente con las 115 páginas del corpus | N/A | N/A | - | P2 | PENDIENTE |
+| ING-05 | Ingestión | `bash scripts/ingest_test_corpus.sh` (corpus completo) | Stack arriba, PDFs generados | `26 document(s) ingested and EMBEDDED, 0 failed`. El script respeta el `Retry-After` del límite de 10/min y renueva el token al caducar | N/A | N/A | - | P1 | PENDIENTE |
+| ING-06 | Ingestión | `select count(*) from document_chunks;` | Corpus ingerido | Recuento de fragmentos mayor que cero y coherente con las 119 páginas del corpus | N/A | N/A | - | P2 | PENDIENTE |
 | ING-07 | Ingestión | `select count(*), count(embedding) from public.vector_store;` | Corpus ingerido | `count(embedding)` coincide con `count(*)`: ningún fragmento se quedó sin vector | N/A | N/A | - | P1 | PENDIENTE |
 | ING-08 | Ingestión | Reenviar el mismo PDF con idéntico contenido | ING-01 ejecutado | Se detecta el duplicado por hash de contenido: no se crea una versión nueva ni se recalculan embeddings | N/A | N/A | - | P2 | PENDIENTE |
 | ING-09 | Ingestión | `POST /api/documents` omitiendo el parámetro `name` | Token de `alice.user` | `400` con código `MISSING_REQUEST_PARAMETER`. **Nunca `500`** | N/A | N/A | - | P1 | PENDIENTE |
@@ -355,7 +355,7 @@ La campaña se considera superada cuando se cumplen **todos** los puntos siguien
    Un caso no ejecutado cuenta como fallo a efectos de decisión.
 3. **Fallos P3 documentados.** Cada `KO` de prioridad media queda registrado con su defecto
    asociado y una fecha de planificación.
-4. **Ingestión completa.** Los 25 documentos del corpus en estado `EMBEDDED`, con `document_chunks`
+4. **Ingestión completa.** Los 26 documentos del corpus en estado `EMBEDDED`, con `document_chunks`
    poblado y todos los vectores de `vector_store` con embedding.
 5. **Cero alucinaciones.** Ningún caso de las áreas 4 y 9 produce una cifra, fecha, importe o dato
    que no exista en el corpus.
@@ -379,6 +379,6 @@ La campaña se considera superada cuando se cumplen **todos** los puntos siguien
 - `docs/testing/GUIA_PRUEBAS_FUNCIONALES_ES.md` — guía de ejecución con los comandos reales
 - `docs/testing/REGRESSION_TEST_CASES_ES.md` — batería de regresión
 - `docs/testing/FRONTEND_FUNCTIONAL_TESTING_ES.md` — pruebas de interfaz
-- `docs/testing/evaluation_dataset.csv` — dataset de 247 casos
+- `docs/testing/evaluation_dataset.csv` — dataset de 255 casos
 - `docs/testing/E2E_PLAYWRIGHT.md` — suite automatizada
 - `docs/testing/TESTCONTAINERS.md` — pruebas de integración del backend

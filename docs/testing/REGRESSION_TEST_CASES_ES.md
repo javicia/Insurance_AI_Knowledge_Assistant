@@ -184,7 +184,7 @@ contener casos cuyo fallo se pueda posponer.
 cd D:/Javier/Proyectos/rag_springai_prueba
 docker compose up -d --build
 docker compose ps                       # diez servicios, ocho healthy
-bash scripts/ingest_test_corpus.sh      # 25 documentos hasta EMBEDDED
+bash scripts/ingest_test_corpus.sh      # 26 documentos hasta EMBEDDED
 ```
 
 No se necesitan claves de OpenAI ni de Anthropic: el proveedor por defecto es `fake` y es
@@ -257,6 +257,6 @@ Ante un `FAIL`:
 - `docs/testing/FUNCTIONAL_TEST_MATRIX_ES.md` — matriz completa de pruebas funcionales
 - `docs/testing/GUIA_PRUEBAS_FUNCIONALES_ES.md` — guía de ejecución con los comandos reales
 - `docs/testing/FRONTEND_FUNCTIONAL_TESTING_ES.md` — pruebas de interfaz
-- `docs/testing/evaluation_dataset.csv` — dataset de 247 casos
+- `docs/testing/evaluation_dataset.csv` — dataset de 255 casos
 - `docs/testing/E2E_PLAYWRIGHT.md` — suite automatizada
 - `docs/testing/TESTCONTAINERS.md` — pruebas de integración del backend

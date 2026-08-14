@@ -10,7 +10,7 @@ transcrita a mano):
 | Commit | `d6dd49e` |
 | Proveedor LLM | `fake` (sin llamada de red) |
 | Umbral semántico | `0.45` (overlay `docker-compose.corpus-es.yml`) |
-| Corpus | 25 documentos españoles, 1.591 fragmentos |
+| Corpus | 25 documentos españoles, 1.591 fragmentos *(estado del corpus en la fecha de esta línea base; posteriormente ampliado a 26 documentos / 1.650 fragmentos)* |
 | Topología | WAF → Gateway → Backend |
 | Entorno | Windows 11 + Docker Desktop (WSL2), con contenedores de otros proyectos activos |
 

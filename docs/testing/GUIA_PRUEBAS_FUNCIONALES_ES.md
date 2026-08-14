@@ -6,8 +6,8 @@
 ## 1. Objetivo
 
 Verificar funcionalmente el sistema completo utilizando el corpus documental ficticio en español
-sobre seguros de automóvil (`test-data/insurance/auto/`, 25 documentos, 115 páginas) y su dataset
-de evaluación (`docs/testing/evaluation_dataset.csv`, 247 casos).
+sobre seguros de automóvil (`test-data/insurance/auto/`, 26 documentos, 119 páginas) y su dataset
+de evaluación (`docs/testing/evaluation_dataset.csv`, 255 casos).
 
 Se comprueba de extremo a extremo: ingestión, extracción, chunking, embeddings, búsqueda semántica
 y léxica, fusión híbrida, reranking, grounding, citas, política de no-answer, exclusiones, límites,
@@ -130,7 +130,7 @@ python scripts/build_test_corpus_pdfs.py --check
 ```
 
 `--check` vuelve a extraer el texto de cada PDF y verifica que no se ha perdido contenido (debe
-mostrar `coverage 100.0%` en los 25). Esto no es cosmético: el extractor real recorta el texto que
+mostrar `coverage 100.0%` en los 26). Esto no es cosmético: el extractor real recorta el texto que
 se salga del rectángulo de página, y una versión anterior del corpus de evaluación se truncó así
 en silencio.
 
@@ -140,12 +140,12 @@ Ingesta completa a través del WAF:
 bash scripts/ingest_test_corpus.sh
 ```
 
-El script obtiene un token, sube los 25 PDFs a `POST /api/documents` y **espera a que cada uno
+El script obtiene un token, sube los 26 PDFs a `POST /api/documents` y **espera a que cada uno
 alcance `EMBEDDED`** consultando `GET /api/documents/{id}`. Gestiona por sí solo dos cosas que
 ocurren de verdad: el rate limit de 10/min de la ruta de documentos (respeta `Retry-After`) y la
 caducidad del token (lo renueva).
 
-Salida esperada al final: `==> 25 document(s) ingested and EMBEDDED, 0 failed`.
+Salida esperada al final: `==> 26 document(s) ingested and EMBEDDED, 0 failed`.
 
 ## 8. Verificación de la ingestión
 
@@ -487,7 +487,7 @@ npx playwright test
 
 ## 26. Ejecución del dataset de evaluación
 
-`docs/testing/evaluation_dataset.csv` (247 casos) es la batería funcional. Cada fila lleva la
+`docs/testing/evaluation_dataset.csv` (255 casos) es la batería funcional. Cada fila lleva la
 pregunta, la respuesta esperada, el grounding esperado, el documento esperado, la categoría y la
 dificultad.
 
@@ -518,7 +518,7 @@ PY
 
 | Área | PASS | FAIL |
 |---|---|---|
-| Ingestión | los 25 documentos en `EMBEDDED` | cualquiera en `FAILED` o atascado en `UPLOADED` |
+| Ingestión | los 26 documentos en `EMBEDDED` | cualquiera en `FAILED` o atascado en `UPLOADED` |
 | Grounding | `GROUNDED` con `sources` no vacío en casos positivos | `GROUNDED` sin citas, o `NOT_GROUNDED` con evidencia disponible |
 | No-answer | `NOT_GROUNDED`, sin citas, sin cifras inventadas | cualquier dato fabricado |
 | Citas | documento, versión y página verificables | citas de documentos que no contienen la respuesta |
@@ -534,7 +534,7 @@ PY
 ## 28. Checklist final
 
 - [ ] Diez servicios arriba; ocho `healthy`; collector y kafka-ui verificados funcionalmente
-- [ ] 25 documentos ingeridos y `EMBEDDED`
+- [ ] 26 documentos ingeridos y `EMBEDDED`
 - [ ] `document_chunks` y `vector_store` poblados, todos los vectores con embedding
 - [ ] Caso positivo: `GROUNDED` + citas + cifra correcta
 - [ ] Caso no-answer: `NOT_GROUNDED`, sin citas, sin invención

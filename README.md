@@ -211,8 +211,8 @@ how per-test isolation is achieved without starting a new container per test cla
 backend directly - including the six real deployment defects that decision surfaced, none of which
 any non-browser check could see.
 
-**Corpus funcional en español** (`test-data/insurance/auto/`) - 25 documentos ficticios de seguro
-de automóvil (115 páginas, ~48.000 palabras) y 247 casos de prueba, para ejercitar el pipeline RAG
+**Corpus funcional en español** (`test-data/insurance/auto/`) - 26 documentos ficticios de seguro
+de automóvil (119 páginas, ~49.000 palabras) y 255 casos de prueba, para ejercitar el pipeline RAG
 con documentación realista en lugar de fixtures de una frase:
 
 ```bash

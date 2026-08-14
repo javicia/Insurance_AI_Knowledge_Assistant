@@ -8,13 +8,13 @@ extremo a extremo contra el stack real** (no sólo creado en disco).
 
 | Métrica | Valor |
 |---|---|
-| Documentos del corpus | **25** (Markdown fuente + PDF generado) |
-| Páginas PDF | **115** |
-| Palabras | **47.385** |
-| Fragmentos (chunks) tras la ingestión | **1.591** |
-| Vectores con embedding | **1.591 / 1.591** |
-| Casos del dataset de evaluación | **247** |
-| Documentos ingeridos correctamente | **25 / 25 en estado `EMBEDDED`, 0 fallos** |
+| Documentos del corpus | **26** (Markdown fuente + PDF generado) |
+| Páginas PDF | **119** |
+| Palabras | **48.964** |
+| Fragmentos (chunks) del corpus curado | **1.650** |
+| Vectores con embedding | **1.650 / 1.650** |
+| Casos del dataset de evaluación | **255** |
+| Documentos ingeridos correctamente | **26 / 26 en estado `EMBEDDED`, 0 fallos** |
 
 La compañía, las coberturas, los importes, las personas y las matrículas son **completamente
 ficticios**. Todos los documentos llevan la advertencia literal
@@ -52,6 +52,7 @@ Ruta base: `test-data/insurance/auto/`
 | 23 | `16-faq/` | Preguntas frecuentes (68 P/R) | FAQ-AUTO-01 |
 | 24 | `17-glosario/` | Glosario asegurador (135 términos) | GLO-AUTO-01 |
 | 25 | `18-reclamaciones/` | Procedimiento de reclamaciones | REC-PROC-01 |
+| 26 | `19-accidentes/` | Accidentes y daños propios | COB-DAPRO-01 |
 
 Cada documento incluye artículos numerados, definiciones, condiciones, exclusiones, límites,
 ejemplos prácticos y **referencias cruzadas** a los códigos de los demás, de modo que muchas
@@ -75,12 +76,12 @@ documentada en DOC-VIG-01.
 
 ## 3. Dataset de evaluación
 
-`docs/testing/evaluation_dataset.csv` — 247 casos, columnas
+`docs/testing/evaluation_dataset.csv` — 255 casos, columnas
 `id,question,expected_answer,expected_grounding,expected_document,category,difficulty`.
 
 | Tipo (`expected_grounding`) | Casos |
 |---|---|
-| `GROUNDED` | 145 |
+| `GROUNDED` | 153 |
 | `NO_ANSWER` | 58 |
 | `DEPENDS` (ambiguos) | 30 |
 | `BLOCKED` (inyección) | 14 |
@@ -104,14 +105,14 @@ Se cumplen y superan todos los mínimos solicitados (100 positivos, 50 no-answer
 ## 4. Estructura de directorios
 
 ```
-test-data/insurance/auto/            25 documentos .md + 25 .pdf en 18 carpetas temáticas
+test-data/insurance/auto/            26 documentos .md + 26 .pdf en 19 carpetas temáticas
 docs/testing/
   GUIA_PRUEBAS_FUNCIONALES_ES.md     guía paso a paso con comandos reales
   FUNCTIONAL_TEST_MATRIX_ES.md       matriz maestra (190 filas)
   REGRESSION_TEST_CASES_ES.md        batería de regresión (62 casos)
   FRONTEND_FUNCTIONAL_TESTING_ES.md  pruebas de interfaz
   INSURANCE_AUTO_TEST_CORPUS_REPORT_ES.md   este informe
-  evaluation_dataset.csv             247 casos
+  evaluation_dataset.csv             255 casos
 scripts/
   build_test_corpus_pdfs.py          Markdown -> PDF, con verificación de extracción
   ingest_test_corpus.sh              ingesta a través del WAF, espera a EMBEDDED
@@ -124,7 +125,7 @@ docker-compose.corpus-es.yml         overlay para usar el corpus con el proveedo
 
 ```bash
 docker compose up -d                                   # stack completo
-python scripts/build_test_corpus_pdfs.py --check       # 25 PDFs, coverage 100%
+python scripts/build_test_corpus_pdfs.py --check       # 26 PDFs, coverage 100%
 bash scripts/ingest_test_corpus.sh                     # ingesta real por el WAF
 ```
 
@@ -138,7 +139,7 @@ como éxito por sí solo.
 ```bash
 python scripts/validate_test_corpus.py                 # consistencia del corpus/dataset
 python scripts/run_functional_probe.py                 # muestra representativa (22 casos)
-python scripts/run_functional_probe.py --all           # los 247 (lento, limitado por rate limit)
+python scripts/run_functional_probe.py --all           # los 255 (lento, limitado por rate limit)
 python scripts/run_functional_probe.py FT-026 FT-188   # casos concretos
 ```
 
@@ -148,10 +149,10 @@ Guía manual completa: `GUIA_PRUEBAS_FUNCIONALES_ES.md`.
 
 | Comprobación | Resultado |
 |---|---|
-| Generación de PDF y reextracción del texto | **25/25 con `coverage 100.0%`** |
+| Generación de PDF y reextracción del texto | **26/26 con `coverage 100.0%`** |
 | Validación de consistencia | **`Validation PASSED`** (0 errores, 2 avisos explicados) |
-| Ingestión real por el WAF | **25/25 `EMBEDDED`, 0 fallos** |
-| Chunks y embeddings | **1.591 / 1.591** |
+| Ingestión real por el WAF | **26/26 `EMBEDDED`, 0 fallos** |
+| Chunks y embeddings | **1.650 / 1.650** (sólo el corpus curado) |
 | Recuperación con cita correcta | Verificada (ver §8) |
 | Política de no-answer | Verificada |
 | Bloqueo de inyección en español | Verificado tras corregir un fallo real (§9) |
@@ -252,6 +253,68 @@ La advertencia de la clase sigue vigente y no queda debilitada: una lista fija d
 regulares es evadible por paráfrasis, traducción a un tercer idioma o codificación. Añadir español
 **cierra un hueco conocido y explotable**; no convierte el guardarraíl en un clasificador.
 
+### 9.1 Ampliación posterior: accidentes y daños propios
+
+Una revisión contra la lista de documentos exigida detectó que faltaba el documento de
+**accidentes y daños propios** (colisión, vuelco, salida de vía, daños en estacionamiento,
+vandalismo y daños por terceros no identificados). Se añadió como `COB-DAPRO-01`
+(`19-accidentes/`), con 8 casos nuevos (FT-248 … FT-255), y se ingirió y verificó igual que el
+resto: PDF con 100 % de extracción, estado `EMBEDDED`, y recuperación comprobada contra el stack.
+
+**Resultado real de los 8 casos: 6 correctos, 2 fallidos** (FT-249 y FT-254).
+
+> **Corrección de una cifra publicada previamente.** Una versión anterior de este informe afirmaba
+> «7 de 8 recuperan correctamente». Ese número no procedía de ejecutar los ocho casos: se había
+> ejecutado una **muestra de 5** (4 correctos) y se extrapoló el resto. Ejecutados los ocho de
+> verdad, el resultado es **6/8**. Se corrige y se deja constancia, porque una cifra extrapolada
+> presentada como medida es justo lo que este proyecto no debe permitirse.
+
+| Caso | Categoría | Resultado | Citas |
+|---|---|---|---|
+| FT-248 | cobertura | GROUNDED | 8 |
+| FT-249 | cobertura | **NOT_GROUNDED (fallo)** | 0 |
+| FT-250 | cobertura | GROUNDED | 8 |
+| FT-251 | exclusion | GROUNDED | 2 |
+| FT-252 | exclusion | GROUNDED | 2 |
+| FT-253 | razonamiento | GROUNDED | 8 |
+| FT-254 | razonamiento | **NOT_GROUNDED (fallo)** | 0 |
+| FT-255 | franquicias | GROUNDED | 5 |
+
+Ambos fallos muestran el mismo diagnóstico del backend:
+`semanticCandidates=0 lexicalCandidates=0 finalCandidates=0`. No se recupera el documento
+equivocado: **no se recupera nada**, de modo que la política de no-answer actúa correctamente sobre
+una recuperación vacía. La causa técnica exacta está en §9.2.
+
+### 9.2 Por qué fallan FT-249 y FT-254: el tokenizador del embedding falso rompe el español
+
+`FakeEmbeddingModelAdapter` tokeniza con la expresión regular **`[a-z0-9]+`** tras pasar el texto a
+minúsculas. Esa clase de caracteres **no incluye vocales acentuadas ni la `ñ`**, así que toda
+palabra acentuada se parte en fragmentos. Reproducible con
+`python scripts/diagnose_fake_embedding_es.py`:
+
+| Texto | Tokens que genera |
+|---|---|
+| `colisión` | `['colisi', 'n']` |
+| `daños propios` | `['da', 'os', 'propios']` |
+| `póliza` | `['p', 'liza']` |
+| `indemnización` | `['indemnizaci', 'n']` |
+| `vehículo eléctrico` | `['veh', 'culo', 'el', 'ctrico']` |
+| `granizo` | `['granizo']` (sin acento: intacta) |
+
+A esto se suma que **no hay lematización**: `identifican` e `identificado` son tokens distintos y no
+comparten ningún bucket pese a significar lo mismo.
+
+- **FT-249** («¿Qué ocurre si me golpean el coche estacionado y no *identifican* al causante?») no
+  solapa con el documento, que dice *«el causante no resulte **identificado**»*.
+- **FT-254** («¿Cubre el seguro a terceros ampliado una *colisión* por mi culpa contra un muro?»)
+  pierde su término más discriminante, `colisión`, convertido en `colisi` + `n`; y además exige
+  combinar la *exclusión* en Terceros Ampliado con la *cobertura* en Todo Riesgo, algo que una
+  bolsa de palabras no puede representar.
+
+Ninguno de los dos efectos afecta a un modelo de embeddings real, que opera sobre subpalabras y
+captura semántica. **Es una limitación del sustituto offline, no del diseño del sistema**, y por eso
+no se corrige bajando umbrales ni reescribiendo las preguntas.
+
 ## 10. Limitaciones
 
 1. **La rama léxica está configurada en `english`.** Corregirlo exige una migración Flyway que
@@ -291,5 +354,32 @@ Verificado por `scripts/validate_test_corpus.py` en cada ejecución:
 - Sin claves de API, tokens, claves privadas ni contraseñas embebidas.
 - Sin datos personales reales: nombres, matrículas (`0000-XXX`), pólizas (`PL-FICT-000123`),
   teléfonos (`900 000 000`) y NIF (`00000000X`) son evidentemente ficticios.
-- La advertencia de documentación ficticia aparece en los 25 documentos.
+- La advertencia de documentación ficticia aparece en los 26 documentos.
 - Compañía y organismo supervisor inventados (IBERIA SEGUROS FICTICIA, S.A. / AFSS).
+
+## 13. Tabla final de cierre
+
+Estado verificado físicamente con `python scripts/audit_corpus_state.py`:
+
+| Métrica | Resultado |
+|---|---:|
+| Documentos | 26 |
+| PDFs | 26 |
+| Páginas | 119 |
+| Palabras | 48.964 |
+| Chunks (corpus curado) | 1.650 |
+| Embeddings (corpus curado) | 1.650 |
+| Casos | 255 |
+| GROUNDED | 153 |
+| NO_ANSWER | 58 |
+| DEPENDS | 30 |
+| BLOCKED | 14 |
+| EMBEDDED | 26/26 |
+| Validación | PASSED |
+
+**Nota sobre los totales de la base de datos.** `select count(*) from documents` devuelve **44**
+documentos y **2.037** fragmentos, no 26 y 1.650. La diferencia no es un error: la base contiene
+además 18 documentos ajenos al corpus curado, generados por los benchmarks de ingesta y por
+pruebas E2E previas. Las cifras de la tabla corresponden **sólo al corpus curado**, que es lo que
+este informe describe. Confundir ambos totales produciría un número con aspecto autoritativo y
+equivocado.

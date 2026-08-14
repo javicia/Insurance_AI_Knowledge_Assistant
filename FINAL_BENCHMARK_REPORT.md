@@ -29,7 +29,9 @@ rendimiento de un LLM real**; representan el pipeline, la recuperación y la inf
 
 - Windows 11 + Docker Desktop (WSL2), 12 CPU lógicas, ~15,5 GiB disponibles para Docker.
 - Commit `d6dd49e`; proveedor `fake`; umbral semántico `0.45` (overlay `corpus-es`).
-- Corpus: 25 documentos españoles, 1.591 fragmentos, 1.591 embeddings.
+- Corpus: 25 documentos españoles, 1.591 fragmentos, 1.591 embeddings. *(Estado en el momento
+  de la medición. El corpus se amplió después a 26 documentos y 1.650 fragmentos; las cifras
+  de rendimiento no se re-midieron, así que se dejan atribuidas al corpus que las produjo.)*
 - **Contención conocida**: otros proyectos mantienen contenedores en marcha en la misma máquina
   (uno ocupa el puerto 8080). Es una fuente real de ruido y está declarada, no ignorada.
 
