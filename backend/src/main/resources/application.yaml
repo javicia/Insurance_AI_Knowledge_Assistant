@@ -191,6 +191,19 @@ insurance-ai:
     # environments without provider credentials (brief section 17/18) - never use in
     # production. Overridable so local validation runs don't require editing this file.
     provider: ${INSURANCE_AI_PROVIDER:openai}
+  benchmark:
+    pricing:
+      # FASE 27 (benchmarking): unit prices consumed only by LlmCostCalculator, never by the
+      # request path. REFERENCE VALUES ONLY - taken from OpenAI's published list prices for
+      # gpt-4o-mini (chat) and text-embedding-3-small (embeddings), and guaranteed to go stale:
+      # vendor prices change without notice and differ per model, region, contract and tier
+      # (cached input and batch pricing are cheaper still). Verify against the tariff actually in
+      # force for this deployment's own account and model before quoting any figure derived from
+      # them, and override here or via the environment. See LlmPricing's Javadoc.
+      input-price-per-million-tokens: 0.15
+      output-price-per-million-tokens: 0.60
+      embedding-price-per-million-tokens: 0.02
+      currency: USD
 
 management:
   endpoints:

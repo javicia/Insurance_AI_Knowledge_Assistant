@@ -75,12 +75,25 @@ y no tiene shell), así que aparecen como `Up`. Se comprueban funcionalmente:
 ```bash
 curl -s -o /dev/null -w "otel-collector: %{http_code}\n" http://localhost:13133/health
 curl -s -o /dev/null -w "kafka-ui:       %{http_code}\n" http://localhost:8081/
-curl -s -o /dev/null -w "backend:        %{http_code}\n" http://localhost:8080/actuator/health
 curl -s -o /dev/null -w "gateway:        %{http_code}\n" http://localhost:8082/actuator/health
 curl -s -o /dev/null -w "WAF:            %{http_code}\n" http://localhost:8000/
+
+# Comprueba el backend DESDE DENTRO del contenedor: si otra aplicación de tu máquina ocupa el
+# puerto 8080, `curl localhost:8080` te respondería a ella y verías "UP" con el backend caído.
+docker compose exec -T backend curl -s -o /dev/null -w "backend:        %{http_code}\n" \
+  http://localhost:8080/actuator/health
 ```
 
 Los cinco deben responder `200`.
+
+> **Conflicto de puerto 8080**: el backend publica `8080:8080`. Si otro proyecto de tu máquina ya
+> lo ocupa, el contenedor entra en bucle de reinicio con
+> `Bind for 0.0.0.0:8080 failed: port is already allocated`, y mientras tanto
+> `http://localhost:8080/actuator/health` responde **de la otra aplicación**, lo que hace parecer
+> que todo está bien. Localiza al culpable con
+> `docker ps --format "{{.Names}}\t{{.Ports}}" | grep 8080` y libera el puerto, o arranca este
+> proyecto con el overlay `docker-compose.hostports.yml` (ver README) para remapearlo sin tocar
+> la otra aplicación.
 
 ## 6. Obtención de un token
 

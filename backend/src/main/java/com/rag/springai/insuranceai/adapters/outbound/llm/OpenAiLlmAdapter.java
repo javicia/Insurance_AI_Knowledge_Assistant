@@ -1,5 +1,6 @@
 package com.rag.springai.insuranceai.adapters.outbound.llm;
 
+import com.rag.springai.insuranceai.adapters.shared.llm.ChatResponseMapper;
 import com.rag.springai.insuranceai.adapters.shared.llm.LlmFailureClassifier;
 import com.rag.springai.insuranceai.adapters.shared.llm.LlmMessageFormatter;
 import com.rag.springai.insuranceai.domain.rag.LlmCompletion;
@@ -9,10 +10,13 @@ import com.rag.springai.insuranceai.domain.shared.exception.TransientProcessingE
 import com.rag.springai.insuranceai.ports.outbound.LlmProvider;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
+
+import java.util.List;
 
 /**
  * {@link LlmProvider} backed by Spring AI's {@code OpenAiChatModel}. Active only when
@@ -29,6 +33,11 @@ import org.springframework.web.client.HttpClientErrorException;
  * are conventionally transient (see {@link LlmFailureClassifier}), so those two are classified as
  * {@link TransientProcessingException} instead, allowing a caller-level retry to plausibly still
  * succeed.
+ *
+ * <p><b>Token usage (FASE 27, benchmarking):</b> calls the {@code ChatResponse}-returning
+ * overload rather than the {@code String} convenience one, because the latter discards the
+ * response metadata that carries the real prompt/completion token counts - see
+ * {@link ChatResponseMapper}. The extracted text is identical either way.
  */
 @Component
 @ConditionalOnProperty(prefix = "insurance-ai.ai", name = "provider", havingValue = "openai")
@@ -45,9 +54,8 @@ public class OpenAiLlmAdapter implements LlmProvider {
         try {
             String userMessage = LlmMessageFormatter.userMessage(prompt.userQuestion(),
                     prompt.retrievedContextPassages());
-            String response = chatModel.call(new SystemMessage(prompt.systemInstructions()),
-                    new UserMessage(userMessage));
-            return new LlmCompletion(response);
+            return ChatResponseMapper.toCompletion(chatModel.call(new Prompt(
+                    List.of(new SystemMessage(prompt.systemInstructions()), new UserMessage(userMessage)))));
         }
         catch (HttpClientErrorException e) {
             if (LlmFailureClassifier.isTransientHttpStatus(e.getStatusCode())) {

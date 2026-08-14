@@ -121,6 +121,18 @@ for the full per-service healthcheck inventory) - Keycloak's own Quarkus startup
   `http://localhost:8080`, `http://localhost:8080/swagger-ui.html`
 - Kafka UI: `http://localhost:8081`
 
+> **If the backend container restarts in a loop**, check for a host port clash before suspecting
+> the application: `docker compose up` fails with
+> `Bind for 0.0.0.0:8080 failed: port is already allocated` when *another* project on your machine
+> already holds `8080`. Find it with `docker ps --format "{{.Names}}\t{{.Ports}}" | grep 8080`.
+> Either free the port, or remap this project's backend without touching the other application:
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.hostports.yml up -d backend
+> ```
+> Beware that while the clash lasts, `http://localhost:8080/actuator/health` answers from the
+> *other* application, so it looks healthy while this project's backend is down - a genuinely
+> misleading reading.
+
 ### Option B - backend/frontend on the host, infrastructure in Docker (development loop)
 
 **1. Prerequisites**: Docker, Java 25, Maven Wrapper (`./mvnw`, bundled, under `backend/`).

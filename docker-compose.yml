@@ -240,6 +240,16 @@ services:
       # SyslogAppender is fire-and-forget UDP).
       INSURANCE_AI_OTEL_SYSLOG_HOST: otel-collector
       INSURANCE_AI_OTEL_SYSLOG_PORT: "5514"
+    # FASE 27 incident: without an explicit hostname the container is named after its random ID,
+    # and Logback's SyslogAppender resolves the LOCAL hostname at configuration time
+    # (SyslogStartConverter -> InetAddress.getLocalHost(), to build the RFC3164 header). When
+    # Docker's embedded DNS could not resolve that ID - reproduced after recreating the network -
+    # the resolution threw UnknownHostException, Logback's configuration failed, and **the whole
+    # application refused to start**, restarting in a loop. Security-event logging thereby became
+    # a hard startup dependency, which contradicts this project's own rule that a broken event
+    # sink must never break the thing it describes (see RateLimitingFilter's identical note).
+    # A fixed, resolvable hostname removes the dependency on DNS for the container's own name.
+    hostname: backend
     ports:
       # Published for direct developer access (Swagger UI, curl) - real network segmentation
       # (removing this and routing every external call through the gateway/WAF only) is FASE 40's
@@ -298,6 +308,11 @@ services:
       INSURANCE_AI_OTLP_ENDPOINT: http://otel-collector:4318
       INSURANCE_AI_OTEL_SYSLOG_HOST: otel-collector
       INSURANCE_AI_OTEL_SYSLOG_PORT: "5514"
+    # Same FASE 27 fix as the backend, for the same reason: Logback's SyslogAppender resolves the
+    # container's own hostname at configuration time, so a DNS hiccup would stop the gateway
+    # starting at all. The gateway only escaped the incident by having started earlier, under
+    # different DNS conditions - it was equally exposed.
+    hostname: gateway
     ports:
       - "8082:8082"
     networks:

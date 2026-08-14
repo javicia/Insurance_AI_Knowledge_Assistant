@@ -1,0 +1,97 @@
+# Benchmark configuration for the Insurance Knowledge Assistant.
+#
+# Everything the harness needs is here - no URL, credential or price is hard-coded in the runner.
+# Values are chosen to match the REAL deployed topology (see `topologies` below); verify them
+# against `docker compose ps` before trusting a run.
+
+environment:
+  name: local-docker-desktop
+  # Purely descriptive, recorded into every result file so runs are comparable later.
+  notes: "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host."
+
+topologies:
+  # The full production path a browser actually takes. This is the default and the only one whose
+  # numbers describe what a user experiences.
+  waf:
+    base_url: "http://localhost:8000"
+    description: "Browser -> WAF -> Gateway -> Backend (full security chain)"
+  # Bypasses the WAF only. The delta against `waf` isolates the WAF's overhead.
+  gateway:
+    base_url: "http://localhost:8082"
+    description: "Gateway -> Backend (no WAF)"
+  # The backend deliberately publishes NO host port in docker-compose.yml, so it cannot be
+  # measured from the host directly. The harness measures it from INSIDE the Docker network
+  # instead (see `docker_network`), which is why there is no base_url here.
+  backend:
+    # The backend normally publishes 8080:8080. On this machine another application already owns
+    # 8080, so the stack is started with docker-compose.hostports.yml, which remaps it to 18080.
+    # Set this to http://localhost:8080 on a machine without that clash.
+    base_url: "http://localhost:18080"
+    description: "Backend directly, bypassing both the gateway and the WAF"
+
+auth:
+  issuer: "http://localhost:8180/realms/insurance-ai"
+  # Confidential client that exists purely for scripted testing (password grant). The browser
+  # client deliberately forbids this grant. This secret belongs to a development realm that is
+  # re-imported on every `docker compose up` and is valid nowhere else.
+  client_id: "insurance-ai-e2e-test"
+  client_secret: "e2e-test-dev-secret-never-used-in-production"
+  username: "alice.user"
+  password: "alice-password"
+  # Tokens live ~5 minutes; long runs must refresh or every request 401s halfway through.
+  refresh_seconds: 240
+
+dataset:
+  # The Spanish functional corpus questions. Only GROUNDED/NO_ANSWER cases are used for load:
+  # BLOCKED cases short-circuit before retrieval and would flatter the latency numbers.
+  path: "docs/testing/evaluation_dataset.csv"
+  categories_for_load: ["cobertura", "limites", "franquicias", "robo", "lunas", "meteorologia",
+                        "asistencia", "conductores", "electricos", "siniestros"]
+
+workload:
+  warmup_requests: 10
+  # Concurrency sweep. 100 is included but the harness stops escalating if the error rate or
+  # latency shows the environment - not the application - has become the limit, and records why.
+  concurrency_levels: [1, 5, 10, 25, 50]
+  requests_per_level: 60
+  sustained_duration_seconds: 300
+  spike_levels: [1, 10, 50, 100]
+  request_timeout_seconds: 120
+
+rate_limits:
+  # From gateway/src/main/resources/application.yaml - the harness must respect these or it
+  # measures the rate limiter instead of the RAG pipeline.
+  chat_per_minute: 60
+  documents_per_minute: 10
+  evaluation_per_minute: 5
+
+resources:
+  # Containers sampled via `docker stats`. Names come from docker-compose.yml.
+  containers:
+    - insurance-ai-waf
+    - insurance-ai-gateway
+    - insurance-ai-backend
+    - insurance-ai-frontend
+    - insurance-ai-postgres
+    - insurance-ai-kafka
+    - insurance-ai-keycloak
+    - insurance-ai-otel-collector
+    - insurance-ai-jaeger
+    - insurance-ai-kafka-ui
+  sample_interval_seconds: 2
+
+cost:
+  # REFERENCE PRICES ONLY - they are configuration, not measurements, and they go stale.
+  # Verify against the provider's current price list before quoting any figure from this file.
+  # Source: OpenAI public pricing page, USD per 1M tokens, recorded 2026-08.
+  currency: USD
+  models:
+    gpt-4o-mini:
+      input_per_million: 0.15
+      output_per_million: 0.60
+    text-embedding-3-small:
+      input_per_million: 0.02
+  # Volume assumptions used only for PROJECTED cost, never presented as observed.
+  projection:
+    requests_per_day: 1000
+    days_per_month: 30

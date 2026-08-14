@@ -1,0 +1,57 @@
+{
+  "benchmark": "cold_vs_warm",
+  "environment": {
+    "captured_at": "2026-08-14T11:32:47.276499+00:00",
+    "git_commit": "d6dd49e",
+    "host_os": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.4",
+    "environment_name": "local-docker-desktop",
+    "environment_notes": "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host.",
+    "llm_provider": "fake",
+    "semantic_similarity_threshold": "0.45"
+  },
+  "container_healthy_after_seconds": 42.1,
+  "cold_first_request": {
+    "latency_ms": 1481.8247000002884,
+    "status": 200,
+    "ok": true,
+    "error": null,
+    "grounding": "GROUNDED",
+    "citations": 8,
+    "blocked": false,
+    "trace_id": "34c70203-9d34-4991-b2e9-7b6b2193edf8"
+  },
+  "warm": {
+    "name": "warm",
+    "concurrency": 1,
+    "requests": 20,
+    "successes": 20,
+    "errors": 0,
+    "error_rate": 0.0,
+    "duration_seconds": 9.61,
+    "throughput_rps": 2.08,
+    "latency": {
+      "count": 20,
+      "min_ms": 126.96,
+      "p50_ms": 491.02,
+      "p75_ms": 563.42,
+      "p90_ms": 607.52,
+      "p95_ms": 743.72,
+      "p99_ms": 876.53,
+      "max_ms": 876.53,
+      "mean_ms": 480.23,
+      "stdev_ms": 173.14
+    },
+    "status_codes": {
+      "200": 20
+    },
+    "rag": {
+      "grounded": 18,
+      "not_grounded": 2,
+      "grounding_rate": 0.9,
+      "mean_citations": 6.05
+    },
+    "notes": []
+  },
+  "cold_penalty_ms": 990.8
+}

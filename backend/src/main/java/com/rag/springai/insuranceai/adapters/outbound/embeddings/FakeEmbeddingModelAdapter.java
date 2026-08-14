@@ -4,6 +4,8 @@ import com.rag.springai.insuranceai.domain.rag.EmbeddingModelDescriptor;
 import com.rag.springai.insuranceai.domain.rag.EmbeddingVector;
 import com.rag.springai.insuranceai.domain.rag.SimilarityMetric;
 import com.rag.springai.insuranceai.ports.outbound.EmbeddingModelPort;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -37,8 +39,30 @@ public class FakeEmbeddingModelAdapter implements EmbeddingModelPort {
 
     private static final Pattern WORD_PATTERN = Pattern.compile("[a-z0-9]+");
 
+    private final MeterRegistry meterRegistry;
+
+    public FakeEmbeddingModelAdapter(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
+
+    /**
+     * Timed as {@code rag.embedding.latency} tagged {@code provider="fake"} exactly like the real
+     * adapter (FASE 27, benchmarking) - and the {@code provider} tag is precisely what keeps the
+     * two apart: an in-process hashing loop measured in microseconds must never be mistaken for,
+     * or averaged together with, a real OpenAI embedding round trip.
+     */
     @Override
     public EmbeddingVector embed(String text) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            return doEmbed(text);
+        }
+        finally {
+            sample.stop(meterRegistry.timer("rag.embedding.latency", "provider", "fake"));
+        }
+    }
+
+    private EmbeddingVector doEmbed(String text) {
         double[] buckets = new double[DIMENSIONS];
         Matcher matcher = WORD_PATTERN.matcher(text.toLowerCase(Locale.ROOT));
         while (matcher.find()) {

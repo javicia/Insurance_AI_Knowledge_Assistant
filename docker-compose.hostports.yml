@@ -1,0 +1,29 @@
+# Overlay for machines where another application already owns one of this project's host ports.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.hostports.yml up -d
+#
+# WHY THIS EXISTS
+# ---------------
+# The backend publishes `8080:8080`. On a developer machine that also runs, say, another project's
+# Kafka UI on 8080, `docker compose up` fails the backend with:
+#
+#     Bind for 0.0.0.0:8080 failed: port is already allocated
+#
+# and the container then restarts in a loop. The failure mode is nastier than it sounds, because
+# `curl http://localhost:8080/actuator/health` keeps answering `{"status":"UP"}` - from the OTHER
+# application - so the stack looks healthy while this project's backend is in fact down. That is a
+# real trap: it was hit while benchmarking this project, and it briefly produced a wrong conclusion
+# about the topology.
+#
+# This overlay remaps only the HOST side. Nothing inside the Docker network changes: the gateway
+# still reaches `http://backend:8080`, and the WAF -> Gateway -> Backend path is untouched, so
+# functional and benchmark results remain comparable with a default deployment.
+#
+# The direct-access URL becomes http://localhost:18080 (Swagger UI at /swagger-ui.html).
+
+services:
+  backend:
+    # `!override` is required: Compose MERGES list-valued keys across overlay files by default, so
+    # a plain `ports:` here would ADD 18080 while keeping 8080 - and the bind would still fail.
+    ports: !override
+      - "18080:8080"

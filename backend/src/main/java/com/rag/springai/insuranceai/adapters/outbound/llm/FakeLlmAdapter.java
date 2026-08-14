@@ -15,6 +15,11 @@ import org.springframework.stereotype.Component;
  * <p><b>Never claims to have "validated OpenAI" or "validated Anthropic"</b> - a run using this
  * adapter proves the pipeline mechanics, not that either real provider works. Selected only
  * when {@code insurance-ai.ai.provider: fake}.
+ *
+ * <p>For the same reason it reports no token usage at all ({@code null}, not {@code 0}): there
+ * was no billable call to count, and a fabricated {@code 0} would let a benchmark run against
+ * this adapter silently report a cost of zero as if it were a measurement (see
+ * {@link LlmCompletion} and {@code LlmCostCalculator}).
  */
 @Component
 @ConditionalOnProperty(prefix = "insurance-ai.ai", name = "provider", havingValue = "fake")

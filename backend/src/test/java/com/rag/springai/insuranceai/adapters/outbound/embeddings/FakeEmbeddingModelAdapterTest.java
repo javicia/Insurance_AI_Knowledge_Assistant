@@ -2,6 +2,7 @@ package com.rag.springai.insuranceai.adapters.outbound.embeddings;
 
 import com.rag.springai.insuranceai.domain.rag.EmbeddingModelDescriptor;
 import com.rag.springai.insuranceai.domain.rag.EmbeddingVector;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -9,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FakeEmbeddingModelAdapterTest {
 
-    private final FakeEmbeddingModelAdapter adapter = new FakeEmbeddingModelAdapter();
+    private final FakeEmbeddingModelAdapter adapter = new FakeEmbeddingModelAdapter(new SimpleMeterRegistry());
 
     @Test
     void producesVectorsMatchingTheDescriptorDimension() {

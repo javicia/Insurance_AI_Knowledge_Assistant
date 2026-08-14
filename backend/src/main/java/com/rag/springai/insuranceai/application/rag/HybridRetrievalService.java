@@ -128,7 +128,7 @@ public class HybridRetrievalService {
         List<HybridRetrievalResult> candidatePool = fused.stream().limit(config.hybrid().candidatePoolSize()).toList();
 
         List<HybridRetrievalResult> ranked = (config.reranking().enabled() && !candidatePool.isEmpty())
-                ? rerankerPort.rerank(question, candidatePool, config.hybrid().finalTopK())
+                ? rerank(question, candidatePool, config.hybrid().finalTopK())
                 : candidatePool.stream().limit(config.hybrid().finalTopK()).toList();
 
         List<HybridRetrievalResult> finalCandidates = contextSelector.select(ranked, config.context().maxCharacters());
@@ -144,6 +144,27 @@ public class HybridRetrievalService {
         sample.stop(meterRegistry.timer("rag.retrieval.latency", "outcome", outcome.name()));
 
         return new HybridRetrievalOutcome(finalCandidates, diagnostics);
+    }
+
+    /**
+     * Times the reranking stage on its own as {@code rag.reranking.latency} (FASE 27,
+     * benchmarking). This is the one pipeline stage worth isolating from the whole-pipeline
+     * {@code rag.retrieval.latency} timer: it is the stage most likely to be swapped for a
+     * genuinely expensive implementation (a cross-encoder model call - see {@code
+     * RuleBasedReranker}'s Javadoc), so "how much of retrieval is reranking" is exactly the
+     * question a benchmark comparing the two would need answered. No metric is emitted at all
+     * when reranking is disabled or the candidate pool is empty: the stage did not run, and a
+     * zero-duration sample would understate the real distribution rather than record its absence.
+     */
+    private List<HybridRetrievalResult> rerank(String question, List<HybridRetrievalResult> candidatePool,
+            int finalTopK) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            return rerankerPort.rerank(question, candidatePool, finalTopK);
+        }
+        finally {
+            sample.stop(meterRegistry.timer("rag.reranking.latency"));
+        }
     }
 
     private static RetrievalOutcome retrievalOutcome(boolean semanticSucceeded, boolean lexicalSucceeded) {

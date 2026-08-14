@@ -1,0 +1,10 @@
+# Python bytecode caches.
+__pycache__/
+lib/__pycache__/
+
+# Temporary PDFs generated per run so the ingestion benchmark cannot be short-circuited by the
+# backend's content-hash deduplication. They are regenerated on every run and are not evidence.
+results/.tmp/
+
+# Result files ARE committed on purpose: they are the evidence behind FINAL_BENCHMARK_REPORT.md
+# and docs/benchmarks/BASELINE.md. Do not ignore results/*.json or results/*.csv.

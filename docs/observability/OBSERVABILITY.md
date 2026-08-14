@@ -39,7 +39,7 @@ details in an unauthenticated response.
 
 ## 3. Latency metrics
 
-Two custom Micrometer timers, both visible via `GET /actuator/metrics/{name}`:
+Custom Micrometer meters, all visible via `GET /actuator/metrics/{name}`:
 
 - `rag.retrieval.latency` (tag: `outcome` = `HYBRID`/`SEMANTIC_ONLY`/`LEXICAL_ONLY`/`ERROR`) -
   `HybridRetrievalService.retrieve`, the whole pipeline (query expansion through context
@@ -49,14 +49,49 @@ Two custom Micrometer timers, both visible via `GET /actuator/metrics/{name}`:
 - `rag.llm.latency` (tags: `provider`, `outcome` = `SUCCESS`/`ERROR`) - `AskInsuranceKnowledgeUseCase`,
   around the `LlmProvider#complete` call specifically (isolated from retrieval and guardrail time).
 
-Both are recorded via a plain `MeterRegistry` dependency injected into the relevant `application`
-service - the same layer that already depends on SLF4J's `Logger`, a comparable third-party
-cross-cutting concern; `MeterRegistry` is provided automatically once `spring-boot-starter-actuator`
-is on the classpath, no manual bean configuration needed. `domain` remains untouched - no metrics
-code there.
+### 3.1 Benchmarking meters (FASE 27)
+
+Added so a benchmark run can report latency, quality-outcome mix and cost from the running
+application rather than from a side script:
+
+- `rag.request.latency` (tag: `outcome` = `GROUNDED_ANSWER`/`NO_ANSWER`/`BLOCKED_BY_GUARDRAIL`/
+  `ERROR`) - the whole `AskInsuranceKnowledgeUseCase.ask` call, i.e. the `rag.retrieval.latency` +
+  `rag.llm.latency` total *plus* guardrails, citation building and audit. Emitted from the same
+  single call site as the AI Audit record and tagged with that record's own `AuditOutcome`, so
+  the metric and the audit row can never disagree about how a request ended.
+- `rag.grounding.count`, `rag.no_answer.count`, `rag.blocked.count` - one counter per outcome.
+  `ERROR` deliberately has no counter: `rag.request.latency{outcome=ERROR}` already counts it.
+- `rag.pii.detected.count` (tag: `where` = `question`/`answer`) - incremented at the same two
+  sites that emit the `PII_DETECTED` security event (`docs/security/SECURITY.md`).
+- `rag.reranking.latency` - just the `RerankerPort#rerank` call. The one retrieval stage worth
+  isolating, because it is the one most likely to be swapped for a genuinely expensive
+  implementation (a cross-encoder rather than today's `RuleBasedReranker`). No sample is recorded
+  when reranking is disabled or the candidate pool is empty - the stage did not run.
+- `rag.embedding.latency` (tag: `provider` = `openai`/`fake`) - recorded inside the embedding
+  *adapter*, not at `HybridRetrievalService`'s call site, so it also covers ingestion-time
+  embedding (`EmbedDocumentVersionUseCase`). The `provider` tag is load-bearing: an in-process
+  hashing loop measured in microseconds must never be averaged together with a real OpenAI round
+  trip.
+- `rag.llm.tokens.input` / `.output` / `.total` (tag: `provider`) - counters fed from the token
+  usage the provider itself reported, which `OpenAiLlmAdapter`/`AnthropicLlmAdapter` now capture
+  from `ChatResponse.getMetadata().getUsage()` (the previously-used `String`-returning
+  `ChatModel#call` overload discarded it). **Nothing is recorded when the provider reported no
+  usage** - `FakeLlmAdapter` never does, and Spring AI's default `EmptyUsage` answers `0` to both
+  token questions, which is explicitly mapped to "unknown" in `ChatResponseMapper`. A counter
+  parked at `0` would be published as a real measurement of a free call and would drag any cost
+  derived from it towards zero. See `LlmCostCalculator` for how these are priced (observed cost)
+  and projected (estimated cost), at the configurable
+  `insurance-ai.benchmark.pricing.*` unit rates.
+
+All are recorded via a plain `MeterRegistry` dependency injected into the relevant `application`
+service (or, for `rag.embedding.latency`, into the adapter) - the same layer that already depends
+on SLF4J's `Logger`, a comparable third-party cross-cutting concern; `MeterRegistry` is provided
+automatically once `spring-boot-starter-actuator` is on the classpath, no manual bean
+configuration needed. `domain` remains untouched - no metrics code there, as
+`ArchitectureTest.domainMustBeFrameworkFree` enforces for `io.micrometer..` explicitly.
 
 AI Audit's per-request `latencyMs` (FASE 9) measures the *whole* `ask()` call (guardrail + retrieval
-+ LLM + audit write); these two Micrometer timers break that total down into its two most
++ LLM + audit write); the retrieval/LLM timers break that total down into its two most
 expensive parts. They intentionally overlap in what they measure - one is a persisted per-request
 fact for forensic lookup, the other is an aggregated, queryable metric for "is this generally
 slow", each fit for a different purpose.

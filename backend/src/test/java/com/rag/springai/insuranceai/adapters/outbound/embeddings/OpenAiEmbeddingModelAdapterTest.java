@@ -2,6 +2,7 @@ package com.rag.springai.insuranceai.adapters.outbound.embeddings;
 
 import com.rag.springai.insuranceai.domain.rag.EmbeddingModelDescriptor;
 import com.rag.springai.insuranceai.domain.rag.EmbeddingVector;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
 
@@ -21,7 +22,7 @@ class OpenAiEmbeddingModelAdapterTest {
         when(embeddingModel.embed("Water damage coverage")).thenReturn(new float[] { 0.1f, 0.2f, 0.3f });
 
         OpenAiEmbeddingModelAdapter adapter = new OpenAiEmbeddingModelAdapter(embeddingModel,
-                "text-embedding-3-small");
+                "text-embedding-3-small", new SimpleMeterRegistry());
 
         EmbeddingVector vector = adapter.embed("Water damage coverage");
 
@@ -35,7 +36,7 @@ class OpenAiEmbeddingModelAdapterTest {
         when(embeddingModel.dimensions()).thenReturn(1536);
 
         OpenAiEmbeddingModelAdapter adapter = new OpenAiEmbeddingModelAdapter(embeddingModel,
-                "text-embedding-3-small");
+                "text-embedding-3-small", new SimpleMeterRegistry());
 
         EmbeddingModelDescriptor descriptor = adapter.descriptor();
 

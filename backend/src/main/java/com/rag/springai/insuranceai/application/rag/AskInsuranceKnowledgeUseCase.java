@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Answers an employee's question using only the ingested insurance documentation (brief
@@ -87,6 +88,18 @@ import java.util.Objects;
  * rag.llm.latency} (tagged {@code provider}/{@code outcome}) via {@link MeterRegistry} - see
  * {@code docs/observability/OBSERVABILITY.md}. Retrieval's own latency is timed separately inside
  * {@link HybridRetrievalService}.
+ *
+ * <p><b>Benchmarking metrics (FASE 27):</b> the whole use case is timed as {@code
+ * rag.request.latency} (tagged {@code outcome} with the same {@link AuditOutcome} the audit
+ * record carries, so a metric and an audit row can never disagree about how a request ended),
+ * and each outcome also increments its own counter - {@code rag.grounding.count}, {@code
+ * rag.no_answer.count}, {@code rag.blocked.count}. {@code rag.pii.detected.count} is tagged
+ * {@code where=question|answer}. All of these are emitted from {@link #recordAudit}/the same
+ * call sites as their audit and security-event counterparts, deliberately: a future new exit
+ * path physically cannot record one without the other. Token counters ({@code
+ * rag.llm.tokens.input}/{@code .output}/{@code .total}, tagged {@code provider}) are emitted
+ * only when the provider actually reported usage - never as zeros, which would make a cost
+ * projection built on them silently wrong (see {@link LlmCompletion}).
  *
  * <p>Knows nothing about OpenAI, Anthropic, {@code ChatClient}, {@code PgVectorStore}, {@code
  * tsvector}, JDBC or HTTP - only the ports/collaborators it depends on.
@@ -142,6 +155,7 @@ public final class AskInsuranceKnowledgeUseCase {
         if (inputAssessment.pii().detected()) {
             log.info("Question contains detected PII (redacted): {}",
                     inputGuardService.sanitizeForLogging(command.question()));
+            meterRegistry.counter("rag.pii.detected.count", "where", "question").increment();
             logSecurityEventSafely(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
                     traceId, currentPrincipalId(), null, null, null, "question"));
         }
@@ -201,10 +215,12 @@ public final class AskInsuranceKnowledgeUseCase {
             throw e;
         }
         llmSample.stop(meterRegistry.timer("rag.llm.latency", "provider", provider, "outcome", "SUCCESS"));
+        recordTokenUsage(provider, completion);
 
         boolean piiInAnswer = inputGuardService.scanForPii(completion.text()).detected();
         if (piiInAnswer) {
             log.warn("Generated answer contains detected PII - review data minimization in source documents");
+            meterRegistry.counter("rag.pii.detected.count", "where", "answer").increment();
             logSecurityEventSafely(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
                     traceId, currentPrincipalId(), null, null, null, "answer"));
         }
@@ -229,6 +245,48 @@ public final class AskInsuranceKnowledgeUseCase {
                 promptVersion, retrievalOutcome, semanticCandidateCount, lexicalCandidateCount, finalCandidateCount,
                 groundingStatus, promptInjectionDetected, piiDetectedInQuestion, piiDetectedInAnswer, latencyMs,
                 outcome, errorClassification);
+        recordRequestMetrics(latencyMs, outcome);
+    }
+
+    /**
+     * Emitted from {@link #recordAudit} rather than from each exit path, so the request timer and
+     * the outcome counters share the audit's own "exactly once per invocation, on every exit
+     * path" guarantee for free - including the two error paths that {@code throw} after
+     * auditing, whose latency would otherwise never be measured at all.
+     *
+     * <p>The timer is fed the already-computed millisecond latency instead of a {@link
+     * Timer.Sample}, so it measures exactly the same interval the audit record reports - two
+     * different numbers for "how long did this request take" would be worse than one coarser one.
+     */
+    private void recordRequestMetrics(long latencyMs, AuditOutcome outcome) {
+        meterRegistry.timer("rag.request.latency", "outcome", outcome.name())
+                .record(latencyMs, TimeUnit.MILLISECONDS);
+        switch (outcome) {
+            case GROUNDED_ANSWER -> meterRegistry.counter("rag.grounding.count").increment();
+            case NO_ANSWER -> meterRegistry.counter("rag.no_answer.count").increment();
+            case BLOCKED_BY_GUARDRAIL -> meterRegistry.counter("rag.blocked.count").increment();
+            // ERROR intentionally has no dedicated counter: rag.request.latency's outcome=ERROR
+            // tag already counts it, and a second, independently-incremented meter for the same
+            // event is one more thing that can silently disagree with the first.
+            case ERROR -> {
+            }
+        }
+    }
+
+    /**
+     * Records the provider's reported token usage - and nothing at all when it reported none
+     * ({@code FakeLlmAdapter} never does, and a real provider may omit it). Substituting zeros
+     * would not be a harmless default: these counters are the observed input to {@code
+     * LlmCostCalculator}, so a zero is indistinguishable from a free call and would understate
+     * the measured cost of a benchmark run.
+     */
+    private void recordTokenUsage(String provider, LlmCompletion completion) {
+        if (!completion.hasTokenUsage()) {
+            return;
+        }
+        meterRegistry.counter("rag.llm.tokens.input", "provider", provider).increment(completion.inputTokens());
+        meterRegistry.counter("rag.llm.tokens.output", "provider", provider).increment(completion.outputTokens());
+        meterRegistry.counter("rag.llm.tokens.total", "provider", provider).increment(completion.totalTokens());
     }
 
     private String currentPrincipalId() {
