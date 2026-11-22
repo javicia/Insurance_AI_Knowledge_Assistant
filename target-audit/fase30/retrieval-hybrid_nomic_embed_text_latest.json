@@ -1,0 +1,16 @@
+{
+  "variant": "hybrid",
+  "model": "nomic-embed-text:latest",
+  "ranked_cases": 153,
+  "recall_at_1": 0.366,
+  "recall_at_3": 0.719,
+  "recall_at_5": 0.8039,
+  "recall_at_8": 0.8824,
+  "mrr": 0.5558,
+  "latency_ms": {
+    "p50": 2460.1,
+    "p95": 2528.3,
+    "p99": 2677.4,
+    "mean": 2466.0
+  }
+}

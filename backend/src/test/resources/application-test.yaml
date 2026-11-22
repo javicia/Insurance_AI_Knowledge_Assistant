@@ -24,6 +24,13 @@ insurance-ai:
     # "fake" is a safe, harmless default for the ~7 test classes that never touch the RAG/LLM
     # subsystem at all, and is exactly what RagPipelineIntegrationTest already needed.
     provider: fake
+    # FASE 31: the embedding provider is now chosen independently of the chat provider, so it has
+    # to be pinned here too. Omitting it inherited application.yaml's `openai` default, which made
+    # every integration test attempt a real OpenAI call: documents stopped at PROCESSED instead of
+    # reaching EMBEDDED, and POST /api/chat answered 503. That regression was caught by
+    # `./mvnw verify` (2 failures + 5 errors) and is exactly the kind of silent coupling the
+    # decoupling was meant to remove - the fix is to be explicit, not to re-couple the properties.
+    embedding-provider: fake
   rag:
     semantic:
       # Test-only override of the fake embedding provider's similarity distribution - never the

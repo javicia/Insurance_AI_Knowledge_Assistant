@@ -56,7 +56,15 @@ import java.util.UUID;
 @Component
 public class PostgresLexicalSearchAdapter implements LexicalSearchPort {
 
-    private static final String TABLE_NAME = "public.vector_store";
+    /**
+     * Must be the SAME table the vector adapter uses (FASE 31): the lexical and semantic branches
+     * fuse candidates by chunk id, so reading them from different tables would fuse two different
+     * corpora and the RRF ranks would be meaningless. Both default to {@code vector_store} and
+     * both read {@code insurance-ai.rag.vector-table}, so they cannot be pointed apart by
+     * configuration.
+     */
+    private static final java.util.Set<String> ALLOWED_TABLE_NAMES =
+            java.util.Set.of("vector_store", "vector_store_bge_m3");
 
     /**
      * Must stay identical to the configuration {@code V8__spanish_full_text_search.sql} indexes
@@ -70,8 +78,17 @@ public class PostgresLexicalSearchAdapter implements LexicalSearchPort {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public PostgresLexicalSearchAdapter(JdbcTemplate jdbcTemplate) {
+    private final String tableName;
+
+    public PostgresLexicalSearchAdapter(JdbcTemplate jdbcTemplate,
+            @org.springframework.beans.factory.annotation.Value("${insurance-ai.rag.vector-table:vector_store}")
+            String configuredTable) {
         this.jdbcTemplate = jdbcTemplate;
+        if (!ALLOWED_TABLE_NAMES.contains(configuredTable)) {
+            throw new IllegalArgumentException("insurance-ai.rag.vector-table must be one of "
+                    + ALLOWED_TABLE_NAMES + ", but was '" + configuredTable + "'");
+        }
+        this.tableName = "public." + configuredTable;
     }
 
     @Override
@@ -96,7 +113,7 @@ public class PostgresLexicalSearchAdapter implements LexicalSearchPort {
                         WHERE term = ANY (tsvector_to_array(content_tsv))) AS matched_term_count
                 FROM %2$s, query_tsquery
                 WHERE content_tsv @@ query_tsquery.query
-                """.formatted(TEXT_SEARCH_CONFIG, TABLE_NAME));
+                """.formatted(TEXT_SEARCH_CONFIG, tableName));
         List<Object> params = new ArrayList<>();
         params.add(query);
         RetrievalFilterSql.appendConditions(sql, params, filter);

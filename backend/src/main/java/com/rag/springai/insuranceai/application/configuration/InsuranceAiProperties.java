@@ -209,10 +209,55 @@ public record InsuranceAiProperties(Rag rag, Security security, Governance gover
         }
     }
 
-    public record Ai(SupportedAiProvider provider) {
+    /**
+     * Which AI providers this deployment uses. {@code provider} selects the <b>chat</b> model;
+     * {@code embeddingProvider} selects the <b>embedding</b> model, independently (FASE 31).
+     *
+     * <p><b>Why they are separate.</b> Until FASE 31 a single property chose both, because every
+     * provider happened to offer both and the two always matched. FASE 30 broke that assumption:
+     * it measured that a local {@code bge-m3} embedding model beats everything else available for
+     * this Spanish corpus (Recall@8 0,9020 vs 0,8431 lexical), while the chat model should stay
+     * {@code FAKE} for deterministic tests and zero cost. That combination - local embeddings,
+     * fake chat - was literally inexpressible before, because
+     * {@code @ConditionalOnExpression("'${insurance-ai.ai.provider}' != 'fake'")} on the OpenAI
+     * embedding adapter tied the two together.
+     *
+     * <p>{@code provider} deliberately keeps its name and meaning (the chat provider), so the
+     * three call sites that read it and the four LLM adapters that condition on it are untouched.
+     * Renaming it to {@code chat.provider} would have been cosmetically tidier and would have
+     * churned every one of them for no behavioural gain.
+     *
+     * <p>{@code embeddingModel} is only meaningful for {@link EmbeddingProvider#OLLAMA}, where it
+     * names the local model (e.g. {@code bge-m3:latest}). It is part of the embedding's
+     * <em>identity</em>, not a cosmetic label - see {@code EmbeddingIdentity}.
+     */
+    public record Ai(SupportedAiProvider provider, EmbeddingProvider embeddingProvider, String embeddingModel) {
         public Ai {
             Objects.requireNonNull(provider, "insurance-ai.ai.provider must be configured");
+            Objects.requireNonNull(embeddingProvider,
+                    "insurance-ai.ai.embedding-provider must be configured (fake|openai|ollama)");
+            if (embeddingProvider == EmbeddingProvider.OLLAMA
+                    && (embeddingModel == null || embeddingModel.isBlank())) {
+                throw new IllegalArgumentException(
+                        "insurance-ai.ai.embedding-model must name a local model (e.g. bge-m3:latest) when "
+                                + "insurance-ai.ai.embedding-provider is 'ollama' - the model name is part of the "
+                                + "embedding identity, so it cannot be left to a default");
+            }
         }
+    }
+
+    /**
+     * The embedding providers this application can use. Independent of {@link SupportedAiProvider}
+     * (the chat providers) because {@code ANTHROPIC} has no embeddings API at all and
+     * {@code OLLAMA} is not a chat provider this project uses - a single shared enum would have
+     * had members that are invalid in one of the two positions.
+     */
+    public enum EmbeddingProvider {
+        /** Deterministic in-process hashing. Test/offline default; never a real model. */
+        FAKE,
+        OPENAI,
+        /** Local models served by Ollama - no API cost, no network egress (FASE 30/31). */
+        OLLAMA
     }
 
     /**

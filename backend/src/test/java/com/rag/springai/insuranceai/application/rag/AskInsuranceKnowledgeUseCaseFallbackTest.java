@@ -93,7 +93,7 @@ class AskInsuranceKnowledgeUseCaseFallbackTest {
                         new InsuranceAiProperties.Security.Pii(true),
                         new InsuranceAiProperties.Security.OAuth2("http://localhost:19999/realms/test")),
                 new InsuranceAiProperties.Governance(new InsuranceAiProperties.Governance.Audit(true)),
-                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE),
+                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE, InsuranceAiProperties.EmbeddingProvider.FAKE, null),
                 new InsuranceAiProperties.Evaluation(
                         new InsuranceAiProperties.Evaluation.Thresholds(1.0, 1.0, 0.75)));
     }
@@ -102,7 +102,7 @@ class AskInsuranceKnowledgeUseCaseFallbackTest {
         InsuranceAiProperties props = properties(fallbackEnabled, allowPii);
         return new AskInsuranceKnowledgeUseCase(hybridRetrievalService, llmProvider, documentRepository, props,
                 inputGuardService, promptRepository, auditService, meterRegistry, securityEventLogger,
-                new GeneralAiFallbackPolicy(props), new GeneralAiBudgetLedger(props, com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference(), java.time.Clock.systemDefaultZone()), new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()));
+                new GeneralAiFallbackPolicy(props), new GeneralAiBudgetLedger(props, com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference(), java.time.Clock.systemDefaultZone()), new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()), new QueryScopeClassifier());
     }
 
     @Test
@@ -248,7 +248,7 @@ class AskInsuranceKnowledgeUseCaseFallbackTest {
                 new GeneralAiBudgetLedger(props, com.rag.springai.insuranceai.application.benchmark.LlmPricing
                         .reference(), java.time.Clock.systemDefaultZone()),
                 new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(
-                        com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()));
+                        com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()), new QueryScopeClassifier());
 
         RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand(GENERAL_QUESTION, TraceId.generate()));
 
@@ -270,7 +270,7 @@ class AskInsuranceKnowledgeUseCaseFallbackTest {
                         new InsuranceAiProperties.Security.Pii(true),
                         new InsuranceAiProperties.Security.OAuth2("http://localhost:19999/realms/test")),
                 new InsuranceAiProperties.Governance(new InsuranceAiProperties.Governance.Audit(true)),
-                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE),
+                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE, InsuranceAiProperties.EmbeddingProvider.FAKE, null),
                 new InsuranceAiProperties.Evaluation(
                         new InsuranceAiProperties.Evaluation.Thresholds(1.0, 1.0, 0.75)));
     }

@@ -121,13 +121,14 @@ public final class AskInsuranceKnowledgeUseCase {
     private final GeneralAiFallbackPolicy generalAiFallbackPolicy;
     private final GeneralAiBudgetLedger budgetLedger;
     private final LlmCostCalculator llmCostCalculator;
+    private final QueryScopeClassifier queryScopeClassifier;
 
     public AskInsuranceKnowledgeUseCase(HybridRetrievalService hybridRetrievalService, LlmProvider llmProvider,
             DocumentRepository documentRepository, InsuranceAiProperties properties,
             InputGuardService inputGuardService, PromptRepository promptRepository, AuditService auditService,
             MeterRegistry meterRegistry, SecurityEventPort securityEventLogger,
             GeneralAiFallbackPolicy generalAiFallbackPolicy, GeneralAiBudgetLedger budgetLedger,
-            LlmCostCalculator llmCostCalculator) {
+            LlmCostCalculator llmCostCalculator, QueryScopeClassifier queryScopeClassifier) {
         this.hybridRetrievalService = Objects.requireNonNull(hybridRetrievalService,
                 "hybridRetrievalService must not be null");
         this.llmProvider = Objects.requireNonNull(llmProvider, "llmProvider must not be null");
@@ -142,6 +143,8 @@ public final class AskInsuranceKnowledgeUseCase {
                 "generalAiFallbackPolicy must not be null");
         this.budgetLedger = Objects.requireNonNull(budgetLedger, "budgetLedger must not be null");
         this.llmCostCalculator = Objects.requireNonNull(llmCostCalculator, "llmCostCalculator must not be null");
+        this.queryScopeClassifier = Objects.requireNonNull(queryScopeClassifier,
+                "queryScopeClassifier must not be null");
     }
 
     public RagAnswer ask(AskInsuranceKnowledgeCommand command) {
@@ -167,6 +170,29 @@ public final class AskInsuranceKnowledgeUseCase {
             meterRegistry.counter("rag.pii.detected.count", "where", "question").increment();
             logSecurityEventSafely(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
                     traceId, currentPrincipalId(), null, null, null, "question"));
+        }
+
+        // Scope control (FASE 32), BEFORE retrieval and therefore before any evidence can be
+        // weighed. Closes three of the four false groundings FASE 31 measured: a credential
+        // request, a private-record lookup and an operation, each of which earned high similarity
+        // because it genuinely talks about insurance. No threshold can separate them - FASE 30 and
+        // 31 both measured that with different models and different thresholds - so this decision
+        // is deliberately independent of every score in the pipeline.
+        //
+        // Runs before retrieval on purpose: text inside retrieved documents therefore cannot
+        // influence it, and neither can query expansion.
+        QueryScope scope = queryScopeClassifier.classify(command.question());
+        if (!scope.allowsDocumentaryGrounding()) {
+            meterRegistry.counter("rag.scope.refused.count", "scope", scope.name()).increment();
+            log.info("Question is out of documentary scope (scope={}) - returning an explicit "
+                    + "no-answer without retrieving or answering", scope);
+            // NO_ANSWER, never BLOCKED: blocking is for an attack on the system, and an employee
+            // asking to change a phone number is not attacking anything. The generic no-answer
+            // message is also what keeps this safe - it cannot imply the operation was carried out.
+            recordAudit(traceId, provider, null, null, null, 0, 0, 0,
+                    GroundingStatus.NOT_GROUNDED.name(), false, inputAssessment.pii().detected(), false,
+                    startNanos, AuditOutcome.NO_ANSWER, null);
+            return RagAnswer.noAnswer(traceId);
         }
 
         HybridRetrievalOutcome outcome;

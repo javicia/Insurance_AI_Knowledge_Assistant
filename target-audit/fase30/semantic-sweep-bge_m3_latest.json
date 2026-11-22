@@ -1,0 +1,115 @@
+{
+  "model": "bge-m3:latest",
+  "sweep": [
+    {
+      "threshold": 0.3,
+      "tp": 151,
+      "false_no_answer": 2,
+      "false_grounding": 58,
+      "correct_refusal": 0,
+      "grounded_recall": 0.9869,
+      "refusal_precision": null,
+      "f1": null
+    },
+    {
+      "threshold": 0.35,
+      "tp": 151,
+      "false_no_answer": 2,
+      "false_grounding": 57,
+      "correct_refusal": 1,
+      "grounded_recall": 0.9869,
+      "refusal_precision": 0.0172,
+      "f1": 0.0339
+    },
+    {
+      "threshold": 0.4,
+      "tp": 151,
+      "false_no_answer": 2,
+      "false_grounding": 55,
+      "correct_refusal": 3,
+      "grounded_recall": 0.9869,
+      "refusal_precision": 0.0517,
+      "f1": 0.0983
+    },
+    {
+      "threshold": 0.45,
+      "tp": 151,
+      "false_no_answer": 2,
+      "false_grounding": 50,
+      "correct_refusal": 8,
+      "grounded_recall": 0.9869,
+      "refusal_precision": 0.1379,
+      "f1": 0.242
+    },
+    {
+      "threshold": 0.5,
+      "tp": 151,
+      "false_no_answer": 2,
+      "false_grounding": 37,
+      "correct_refusal": 21,
+      "grounded_recall": 0.9869,
+      "refusal_precision": 0.3621,
+      "f1": 0.5298
+    },
+    {
+      "threshold": 0.55,
+      "tp": 149,
+      "false_no_answer": 4,
+      "false_grounding": 22,
+      "correct_refusal": 36,
+      "grounded_recall": 0.9739,
+      "refusal_precision": 0.6207,
+      "f1": 0.7582
+    },
+    {
+      "threshold": 0.6,
+      "tp": 134,
+      "false_no_answer": 19,
+      "false_grounding": 12,
+      "correct_refusal": 46,
+      "grounded_recall": 0.8758,
+      "refusal_precision": 0.7931,
+      "f1": 0.8324
+    },
+    {
+      "threshold": 0.65,
+      "tp": 101,
+      "false_no_answer": 52,
+      "false_grounding": 2,
+      "correct_refusal": 56,
+      "grounded_recall": 0.6601,
+      "refusal_precision": 0.9655,
+      "f1": 0.7841
+    },
+    {
+      "threshold": 0.7,
+      "tp": 39,
+      "false_no_answer": 114,
+      "false_grounding": 1,
+      "correct_refusal": 57,
+      "grounded_recall": 0.2549,
+      "refusal_precision": 0.9828,
+      "f1": 0.4048
+    },
+    {
+      "threshold": 0.75,
+      "tp": 14,
+      "false_no_answer": 139,
+      "false_grounding": 0,
+      "correct_refusal": 58,
+      "grounded_recall": 0.0915,
+      "refusal_precision": 1.0,
+      "f1": 0.1677
+    },
+    {
+      "threshold": 0.8,
+      "tp": 0,
+      "false_no_answer": 153,
+      "false_grounding": 0,
+      "correct_refusal": 58,
+      "grounded_recall": null,
+      "refusal_precision": 1.0,
+      "f1": null
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+# FASE 31 - PostgreSQL aislado para el BACKEND REAL con embeddings bge-m3.
+#
+#   docker compose -p insurance-ai-fase31-eval -f docker-compose.fase31-eval.yml up -d
+#
+# Diferencia respecto al de FASE 30: aquel contenia solo tablas de medicion
+# (`corpus_chunk` + `emb_*`) para un arnes Python. Este lo puebla FLYWAY con el esquema completo
+# de la aplicacion (V1..V10), porque aqui arranca el backend de Spring de verdad y necesita
+# `documents`, `document_versions`, `prompts`, `ai_audit_records` y `vector_store_bge_m3`.
+#
+# Aislamiento, verificable con `docker volume ls` / `docker port`:
+#   - Proyecto Compose propio, de modo que Compose no puede adoptar recursos del stack principal.
+#   - Volumen propio `fase31-eval-pgdata`.
+#   - Puerto 5435 (el principal publica 5433; el de FASE 30, 5434). Los tres no se solapan.
+#   - BD, usuario y contrasena distintos: una cadena de conexion copiada por error falla en lugar
+#     de escribir en el sitio equivocado.
+#
+# DESECHABLE: contiene solo copias de los 26 documentos curados y sus embeddings bge-m3.
+services:
+  postgres-fase31:
+    image: pgvector/pgvector:pg16
+    container_name: fase31-eval-postgres
+    environment:
+      POSTGRES_DB: fase31_eval
+      POSTGRES_USER: fase31_eval
+      POSTGRES_PASSWORD: fase31_eval_local_only
+    ports:
+      - "5435:5432"
+    volumes:
+      - fase31-eval-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fase31_eval -d fase31_eval"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+volumes:
+  fase31-eval-pgdata:

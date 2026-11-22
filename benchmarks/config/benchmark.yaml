@@ -15,6 +15,13 @@ topologies:
   waf:
     base_url: "http://localhost:8000"
     description: "Browser -> WAF -> Gateway -> Backend (full security chain)"
+  # FASE 31: backend AISLADO con embeddings locales bge-m3 (puerto 8091), apuntando a la BD de
+  # evaluacion en el puerto 5435. Se ataca el backend directamente y no el WAF a proposito: el
+  # objetivo es medir la calidad del RAG con bge-m3, no la cadena de borde, que ya esta cubierta
+  # por Playwright. Al no pasar por el gateway, no aplica su limite de 60 req/min.
+  fase31-bge-m3:
+    base_url: "http://localhost:8091"
+    description: "Backend aislado -> PostgreSQL 5435 -> embeddings bge-m3 via Ollama"
   # Bypasses the WAF only. The delta against `waf` isolates the WAF's overhead.
   gateway:
     base_url: "http://localhost:8082"

@@ -9,6 +9,34 @@ spring:
       connect-timeout: 5s
       read-timeout: 30s
   ai:
+    model:
+      # FASE 31. Decides WHICH Spring AI embedding autoconfiguration activates. Both the OpenAI
+      # and the Ollama starters are on the classpath, and each would contribute an
+      # `EmbeddingModel` bean; without this property the injection in the embedding adapters is
+      # ambiguous and the context fails to start.
+      #
+      # MUST agree with insurance-ai.ai.embedding-provider:
+      #   embedding-provider: fake    -> spring.ai.model.embedding: none
+      #   embedding-provider: openai  -> spring.ai.model.embedding: openai
+      #   embedding-provider: ollama  -> spring.ai.model.embedding: ollama
+      #
+      # EmbeddingProviderConfiguration verifies this at startup and fails with an explanatory
+      # message, because the dangerous direction does NOT fail on its own: ollama+openai would
+      # produce OpenAI vectors labelled as Ollama, corrupting the stored embedding identity and
+      # spending money on an API this project forbids.
+      embedding: ${SPRING_AI_MODEL_EMBEDDING:openai}
+    ollama:
+      # Local inference endpoint. Never a public address: the embedding service must not be
+      # exposed beyond the host (FASE 30 security review).
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        options:
+          model: ${INSURANCE_AI_EMBEDDING_MODEL:bge-m3:latest}
+      init:
+        # Do NOT let Spring AI pull models on startup. A pull is a multi-hundred-megabyte network
+        # operation that would turn a misconfigured model name into a silent download instead of
+        # a fast, readable failure.
+        pull-model-strategy: never
     retry:
       # Spring AI auto-configures a RetryTemplate around every ChatModel#call (spring-ai-
       # autoconfigure-retry) - its own defaults (10 attempts, backoff up to 3 minutes between
@@ -240,10 +268,25 @@ insurance-ai:
       min-no-answer-accuracy: 1.0
       min-recall-at-k: 0.75
   ai:
-    # openai | anthropic | fake. "fake" selects deterministic offline adapters for
+    # CHAT provider: openai | anthropic | fake. "fake" selects deterministic offline adapters for
     # environments without provider credentials (brief section 17/18) - never use in
     # production. Overridable so local validation runs don't require editing this file.
+    #
+    # FASE 31: this property no longer selects the embedding model. It used to, and that coupling
+    # made the combination FASE 30 measured as best - local bge-m3 embeddings with a fake chat
+    # model for deterministic tests - literally inexpressible.
     provider: ${INSURANCE_AI_PROVIDER:openai}
+    # EMBEDDING provider: fake | openai | ollama. Independent of the chat provider above.
+    #
+    # Default kept at `openai` so this change alters NO existing behaviour: before FASE 31 any
+    # non-fake chat provider selected the OpenAI embedding adapter, and the shipped default chat
+    # provider is `openai`.
+    embedding-provider: ${INSURANCE_AI_EMBEDDING_PROVIDER:openai}
+    # Only meaningful for embedding-provider=ollama, where it names the local model. It is part of
+    # the embedding IDENTITY, not a label: bge-m3 produces 1024 dimensions against the fake
+    # provider's 1536, and its cosine scale is different enough that the inherited
+    # similarity-threshold of 0.75 would reject 91 % of genuine evidence (FASE 30).
+    embedding-model: ${INSURANCE_AI_EMBEDDING_MODEL:bge-m3:latest}
   benchmark:
     pricing:
       # FASE 27 (benchmarking): unit prices consumed only by LlmCostCalculator, never by the

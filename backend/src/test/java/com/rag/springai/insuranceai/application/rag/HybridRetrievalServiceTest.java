@@ -64,7 +64,7 @@ class HybridRetrievalServiceTest {
                         new InsuranceAiProperties.Security.Pii(true),
                         new InsuranceAiProperties.Security.OAuth2("http://localhost:19999/realms/test")),
                 new InsuranceAiProperties.Governance(new InsuranceAiProperties.Governance.Audit(true)),
-                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE),
+                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE, InsuranceAiProperties.EmbeddingProvider.FAKE, null),
                 new InsuranceAiProperties.Evaluation(
                         new InsuranceAiProperties.Evaluation.Thresholds(1.0, 1.0, 0.75)));
         return new HybridRetrievalService(embeddingModelPort, vectorSearchPort, lexicalSearchPort, rerankerPort,

@@ -8,7 +8,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -33,7 +33,7 @@ import java.util.List;
  * measurement scoped to the real network round trip rather than to surrounding orchestration.
  */
 @Component
-@ConditionalOnExpression("'${insurance-ai.ai.provider}' != 'fake'")
+@ConditionalOnProperty(prefix = "insurance-ai.ai", name = "embedding-provider", havingValue = "openai")
 public class OpenAiEmbeddingModelAdapter implements EmbeddingModelPort {
 
     private final EmbeddingModel embeddingModel;

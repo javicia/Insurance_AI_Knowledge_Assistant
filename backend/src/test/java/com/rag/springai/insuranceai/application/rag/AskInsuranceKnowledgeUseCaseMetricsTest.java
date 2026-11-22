@@ -70,7 +70,7 @@ class AskInsuranceKnowledgeUseCaseMetricsTest {
     private final AskInsuranceKnowledgeUseCase useCase = new AskInsuranceKnowledgeUseCase(hybridRetrievalService,
             llmProvider, documentRepository, properties(), inputGuardService, promptRepository, auditService,
             meterRegistry, securityEventLogger,
-            new GeneralAiFallbackPolicy(properties()), new GeneralAiBudgetLedger(properties(), com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference(), java.time.Clock.systemDefaultZone()), new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()));
+            new GeneralAiFallbackPolicy(properties()), new GeneralAiBudgetLedger(properties(), com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference(), java.time.Clock.systemDefaultZone()), new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()), new QueryScopeClassifier());
 
     @BeforeEach
     void stubGuardsAsClean() {
@@ -95,7 +95,7 @@ class AskInsuranceKnowledgeUseCaseMetricsTest {
                         new InsuranceAiProperties.Security.Pii(true),
                         new InsuranceAiProperties.Security.OAuth2("http://localhost:19999/realms/test")),
                 new InsuranceAiProperties.Governance(new InsuranceAiProperties.Governance.Audit(true)),
-                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE),
+                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE, InsuranceAiProperties.EmbeddingProvider.FAKE, null),
                 new InsuranceAiProperties.Evaluation(
                         new InsuranceAiProperties.Evaluation.Thresholds(1.0, 1.0, 0.75)));
     }

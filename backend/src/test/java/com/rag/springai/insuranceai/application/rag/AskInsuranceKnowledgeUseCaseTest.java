@@ -82,7 +82,7 @@ class AskInsuranceKnowledgeUseCaseTest {
 
     private final AskInsuranceKnowledgeUseCase useCase = new AskInsuranceKnowledgeUseCase(hybridRetrievalService,
             llmProvider, documentRepository, properties, inputGuardService, promptRepository, auditService,
-            meterRegistry, securityEventLogger, new GeneralAiFallbackPolicy(properties), new GeneralAiBudgetLedger(properties, com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference(), java.time.Clock.systemDefaultZone()), new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()));
+            meterRegistry, securityEventLogger, new GeneralAiFallbackPolicy(properties), new GeneralAiBudgetLedger(properties, com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference(), java.time.Clock.systemDefaultZone()), new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()), new QueryScopeClassifier());
 
     @BeforeEach
     void stubGuardsAsClean() {
@@ -117,7 +117,7 @@ class AskInsuranceKnowledgeUseCaseTest {
                         new InsuranceAiProperties.Security.Pii(true),
                         new InsuranceAiProperties.Security.OAuth2("http://localhost:19999/realms/test")),
                 new InsuranceAiProperties.Governance(new InsuranceAiProperties.Governance.Audit(true)),
-                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE),
+                new InsuranceAiProperties.Ai(InsuranceAiProperties.SupportedAiProvider.FAKE, InsuranceAiProperties.EmbeddingProvider.FAKE, null),
                 new InsuranceAiProperties.Evaluation(
                         new InsuranceAiProperties.Evaluation.Thresholds(1.0, 1.0, 0.75)));
     }
@@ -156,7 +156,7 @@ class AskInsuranceKnowledgeUseCaseTest {
     private AskInsuranceKnowledgeUseCase useCaseWithProperties(InsuranceAiProperties props) {
         return new AskInsuranceKnowledgeUseCase(hybridRetrievalService, llmProvider, documentRepository, props,
                 inputGuardService, promptRepository, auditService, meterRegistry, securityEventLogger,
-                new GeneralAiFallbackPolicy(props), new GeneralAiBudgetLedger(props, com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference(), java.time.Clock.systemDefaultZone()), new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()));
+                new GeneralAiFallbackPolicy(props), new GeneralAiBudgetLedger(props, com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference(), java.time.Clock.systemDefaultZone()), new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()), new QueryScopeClassifier());
     }
 
     private HybridRetrievalOutcome outcomeOf(RetrievalOutcome retrievalOutcome, HybridRetrievalResult... candidates) {
@@ -423,6 +423,77 @@ class AskInsuranceKnowledgeUseCaseTest {
         RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand("pregunta parafraseada", TraceId.generate()));
 
         assertEquals(GroundingStatus.GROUNDED, answer.grounding().status());
+    }
+
+    // --- FASE 32: scope control must stop the pipeline before any evidence is weighed ---
+
+    @Test
+    void aTransactionalRequestIsRefusedWithoutRetrievingOrAnswering() {
+        // FT-245. The decisive assertion is that retrieval is never invoked: the question earned
+        // the HIGHEST similarity of every negative in FASE 31 (0,7174), so any design that let it
+        // reach grounding would depend on a threshold that cannot exist.
+        RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand(
+                "Actualizad mi telefono de contacto a 600 000 000 en la poliza PL-FICT-000123.",
+                TraceId.generate()));
+
+        assertEquals(AnswerMode.NO_ANSWER, answer.answerMode());
+        assertTrue(answer.sources().isEmpty());
+        verify(hybridRetrievalService, never()).retrieve(any(), any());
+        verify(llmProvider, never()).complete(any());
+    }
+
+    @Test
+    void aCredentialRequestIsRefusedWithoutRetrievingOrAnswering() {
+        // FT-133. A fabricated credential would be worse than no answer, so the LLM must never
+        // be given the chance to produce one.
+        RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand(
+                "Cual es la contrasena del area privada de clientes?", TraceId.generate()));
+
+        assertEquals(AnswerMode.NO_ANSWER, answer.answerMode());
+        verify(hybridRetrievalService, never()).retrieve(any(), any());
+        verify(llmProvider, never()).complete(any());
+    }
+
+    @Test
+    void aPrivateRecordLookupIsRefusedWithoutRetrievingOrAnswering() {
+        // FT-242. Documentation describes how claims work; it never holds the state of one.
+        RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand(
+                "Mi poliza es PL-FICT-000123, cual es el estado de mi siniestro?", TraceId.generate()));
+
+        assertEquals(AnswerMode.NO_ANSWER, answer.answerMode());
+        verify(hybridRetrievalService, never()).retrieve(any(), any());
+    }
+
+    @Test
+    void aRefusedScopeIsNeverReportedAsBlocked() {
+        // BLOCKED is reserved for an attack on the system. An employee asking to change a phone
+        // number is not attacking anything, and labelling it as an attack would both mislead the
+        // user and pollute rag.blocked.count, which security monitoring reads.
+        RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand(
+                "Dad de baja mi poliza", TraceId.generate()));
+
+        assertEquals(AnswerMode.NO_ANSWER, answer.answerMode());
+        assertEquals(0.0, meterRegistry.counter("rag.blocked.count").count());
+        assertEquals(1.0, meterRegistry.counter("rag.scope.refused.count", "scope",
+                "TRANSACTIONAL_REQUEST").count());
+    }
+
+    @Test
+    void aProceduralQuestionAboutTheSameTopicStillReachesRetrieval() {
+        // The other half of the control, and the one that protects the product: asking HOW to
+        // update a phone number is a documented procedure and must still be answered.
+        Document document = homePremiumPolicy();
+        HybridRetrievalResult candidate = candidateOf(document, "Para actualizar sus datos...", 1, null, 0.9, null);
+        when(hybridRetrievalService.retrieve(any(), any()))
+                .thenReturn(outcomeOf(RetrievalOutcome.HYBRID, candidate));
+        when(documentRepository.findById(document.id())).thenReturn(Optional.of(document));
+        when(llmProvider.complete(any())).thenReturn(new LlmCompletion("Debe aportar..."));
+
+        RagAnswer answer = useCase.ask(new AskInsuranceKnowledgeCommand(
+                "Como puedo actualizar mi telefono de contacto?", TraceId.generate()));
+
+        assertEquals(AnswerMode.DOCUMENT_GROUNDED, answer.answerMode());
+        verify(hybridRetrievalService).retrieve(any(), any());
     }
 
     @Test

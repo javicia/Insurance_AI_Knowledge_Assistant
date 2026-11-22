@@ -25,14 +25,15 @@ import java.util.regex.Pattern;
  * <p><b>This is not a real embedding model</b> and must never be presented as one. It exists
  * solely so the FASE 5 pipeline (embed -&gt; index -&gt; retrieve -&gt; ground) can be validated -
  * automatically and manually - in environments without OpenAI/Anthropic credentials. Selected
- * only when {@code insurance-ai.ai.provider: fake}.
+ * only when {@code insurance-ai.ai.embedding-provider: fake} - since FASE 31 that is
+ * independent of the chat provider.
  *
  * <p>{@link #DIMENSIONS} is 1536, matching {@code V3__vector_store.sql}'s fixed-width
  * {@code embedding vector(1536)} column exactly: pgvector rejects any vector whose dimension
  * does not match the column's declared width, regardless of which model produced it.
  */
 @Component
-@ConditionalOnProperty(prefix = "insurance-ai.ai", name = "provider", havingValue = "fake")
+@ConditionalOnProperty(prefix = "insurance-ai.ai", name = "embedding-provider", havingValue = "fake")
 public class FakeEmbeddingModelAdapter implements EmbeddingModelPort {
 
     static final int DIMENSIONS = 1536;

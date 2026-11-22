@@ -49,13 +49,43 @@ import java.util.UUID;
 @Component
 public class PgVectorStoreAdapter implements VectorSearchPort, VectorIndexPort {
 
-    private static final String TABLE_NAME = PgVectorStore.DEFAULT_SCHEMA_NAME + "." + PgVectorStore.DEFAULT_TABLE_NAME;
+    /**
+     * Which vector table this adapter reads and writes (FASE 31). Defaults to Spring AI's own
+     * {@code public.vector_store}, so the deployed behaviour is unchanged.
+     *
+     * <p>Configurable because pgvector fixes the vector width in the column definition, so two
+     * embedding models with different dimensions physically cannot share one table:
+     * {@code vector_store} is {@code vector(1536)} for the fake/OpenAI models, while
+     * {@code vector_store_bge_m3} is {@code vector(1024)} (see
+     * {@code V10__bge_m3_parallel_vector_store.sql}). Switching models is therefore switching
+     * tables, which is also what makes a rollback a configuration change rather than a data
+     * migration - the original vectors are never overwritten.
+     *
+     * <p>Interpolated into SQL text, so it is deliberately NOT free-form input: the value is
+     * validated against an allow-list at construction.
+     */
+    /**
+     * The only table names this adapter will ever interpolate. An allow-list rather than a regex
+     * because the set of vector tables is small, known, and created by migrations - anything
+     * outside it is a configuration error, not a table this application should query.
+     */
+    private static final java.util.Set<String> ALLOWED_TABLE_NAMES =
+            java.util.Set.of("vector_store", "vector_store_bge_m3");
 
+    private final String tableName;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public PgVectorStoreAdapter(JdbcTemplate jdbcTemplate) {
+    public PgVectorStoreAdapter(JdbcTemplate jdbcTemplate,
+            @org.springframework.beans.factory.annotation.Value("${insurance-ai.rag.vector-table:vector_store}")
+            String configuredTable) {
         this.jdbcTemplate = jdbcTemplate;
+        if (!ALLOWED_TABLE_NAMES.contains(configuredTable)) {
+            throw new IllegalArgumentException("insurance-ai.rag.vector-table must be one of "
+                    + ALLOWED_TABLE_NAMES + ", but was '" + configuredTable + "'. The value is interpolated into "
+                    + "SQL, so it is restricted to tables this application's migrations create.");
+        }
+        this.tableName = PgVectorStore.DEFAULT_SCHEMA_NAME + "." + configuredTable;
     }
 
     @Override
@@ -68,7 +98,7 @@ public class PgVectorStoreAdapter implements VectorSearchPort, VectorIndexPort {
                 INSERT INTO %s (id, content, metadata, embedding)
                 VALUES (?, ?, ?::json, ?)
                 ON CONFLICT (id) DO UPDATE SET content = ?, metadata = ?::json, embedding = ?
-                """.formatted(TABLE_NAME),
+                """.formatted(tableName),
                 chunk.id().value(), chunk.content().value(), metadataJson, vector, chunk.content().value(),
                 metadataJson, vector);
     }
@@ -81,7 +111,7 @@ public class PgVectorStoreAdapter implements VectorSearchPort, VectorIndexPort {
         StringBuilder filterClause = new StringBuilder();
         List<Object> filterParams = new ArrayList<>();
         RetrievalFilterSql.appendConditions(filterClause, filterParams, filter);
-        String sql = PgVectorStore.PgDistanceType.COSINE_DISTANCE.similaritySearchSqlTemplate.formatted(TABLE_NAME,
+        String sql = PgVectorStore.PgDistanceType.COSINE_DISTANCE.similaritySearchSqlTemplate.formatted(tableName,
                 filterClause.toString());
 
         List<Object> params = new ArrayList<>(List.of(vector, vector, maxDistance));
