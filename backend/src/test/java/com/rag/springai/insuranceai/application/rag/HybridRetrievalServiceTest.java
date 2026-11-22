@@ -162,6 +162,38 @@ class HybridRetrievalServiceTest {
                 () -> serviceWith(true, false).retrieve("question", RetrievalFilter.none()));
     }
 
+    /**
+     * Regression, measured against a real OpenAI outage (429 insufficient_quota): the semantic
+     * branch threw while the lexical branch succeeded with zero rows, and the request was answered
+     * HTTP 200 "no sufficient information" and audited as NO_ANSWER. A provider being unavailable
+     * must never be reported as the documentation not containing the answer.
+     */
+    @Test
+    void throwsWhenABranchFailedAndTheSurvivingBranchFoundNothing() {
+        when(embeddingModelPort.embed(any())).thenThrow(new RuntimeException("embedding provider down"));
+        when(lexicalSearchPort.search(any(), anyInt(), any())).thenReturn(List.of());
+
+        assertThrows(TransientProcessingException.class,
+                () -> serviceWith(true, false).retrieve("question", RetrievalFilter.none()));
+    }
+
+    /**
+     * The other side of the same rule: when both branches actually ran and simply found nothing,
+     * that is a genuine no-answer and must keep flowing through as an empty result, not an error.
+     * This is what keeps the fake-provider baselines identical across this change.
+     */
+    @Test
+    void returnsAnEmptyResultWhenBothBranchesSucceedAndFindNothing() {
+        when(embeddingModelPort.embed(any())).thenReturn(new EmbeddingVector(List.of(0.1f)));
+        when(vectorSearchPort.search(any(), anyInt(), any(Double.class), any())).thenReturn(List.of());
+        when(lexicalSearchPort.search(any(), anyInt(), any())).thenReturn(List.of());
+
+        HybridRetrievalOutcome outcome = serviceWith(true, false).retrieve("question", RetrievalFilter.none());
+
+        assertEquals(RetrievalOutcome.HYBRID, outcome.diagnostics().outcome());
+        assertEquals(0, outcome.finalCandidates().size());
+    }
+
     @Test
     void skipsRerankingWhenDisabled() {
         when(embeddingModelPort.embed(any())).thenReturn(new EmbeddingVector(List.of(0.1f)));

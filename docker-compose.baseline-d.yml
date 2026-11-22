@@ -1,0 +1,90 @@
+# BASELINE D (OpenAI real) - entorno AISLADO.
+#
+# Por que existe este overlay
+# ---------------------------
+# Las lineas base A/B/C se midieron con el proveedor `fake`, cuyos vectores los produce
+# FakeEmbeddingModelAdapter (hashing de bolsa de palabras). Los vectores de OpenAI viven en un
+# espacio completamente distinto: una similitud coseno entre un vector fake y uno de OpenAI no
+# significa nada. Reingerir el corpus con OpenAI sobre el MISMO `vector_store` haria dos danos a
+# la vez - corromperia la recuperacion (mezclando dos espacios incomparables en una sola tabla) y
+# destruiria de forma irreversible el estado bajo el que se midieron B y C.
+#
+# Por eso este overlay levanta un backend SEPARADO contra una BASE DE DATOS SEPARADA dentro del
+# mismo PostgreSQL (opcion preferente del encargo: "PostgreSQL/schema/base de datos aislada").
+# Flyway crea el esquema completo en esa base nueva al arrancar, asi que `vector_store` empieza
+# vacio y ningun documento historico se arrastra: el corpus de la linea base D es exactamente el
+# corpus curado de 26 documentos y nada mas.
+#
+# La base de datos hay que crearla UNA sola vez antes del primer arranque (el servicio PostgreSQL
+# de este proyecto no monta un directorio initdb, y los scripts de initdb solo se ejecutarian con
+# el volumen vacio, lo que destruiria las bases existentes):
+#
+#   docker exec insurance-ai-postgres psql -U insurance_ai -d insurance_ai \
+#     -c "CREATE DATABASE insurance_ai_baseline_d OWNER insurance_ai;"
+#
+# La extension pgvector debe habilitarse dentro de esa base nueva; las extensiones son por base de
+# datos, no por servidor. Flyway lo hace en V3__vector_store.sql, pero requiere superusuario:
+#
+#   docker exec insurance-ai-postgres psql -U insurance_ai -d insurance_ai_baseline_d \
+#     -c "CREATE EXTENSION IF NOT EXISTS vector;"
+#
+# Uso:
+#   docker compose -f docker-compose.yml -f docker-compose.corpus-es.yml \
+#                  -f docker-compose.hostports.yml -f docker-compose.baseline-d.yml \
+#                  up -d backend-openai
+#
+# El servicio `backend` original NO se toca: sigue en pie, con el proveedor fake y su propia base
+# de datos, de modo que B y C se pueden reproducir en cualquier momento.
+
+services:
+  backend-openai:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: insurance-ai-backend-openai
+    restart: "no"
+    environment:
+      # Base de datos DISTINTA en el mismo servidor - este es el aislamiento.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/insurance_ai_baseline_d
+      POSTGRES_USER: ${POSTGRES_USER:-insurance_ai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insurance_ai}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # El unico motivo de existir de este servicio.
+      INSURANCE_AI_PROVIDER: openai
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?BASELINE D requiere OPENAI_API_KEY en .env}
+      # Umbral de PRODUCCION, no el 0.45 del overlay de corpus. Ese 0.45 se bajo para compensar
+      # los embeddings falsos; con embeddings reales volver a usarlo falsearia la comparacion.
+      INSURANCE_AI_RAG_SEMANTIC_SIMILARITY_THRESHOLD: "0.75"
+      INSURANCE_AI_OIDC_JWK_SET_URI: http://keycloak:8080/realms/insurance-ai/protocol/openid-connect/certs
+      INSURANCE_AI_OIDC_ISSUER: ${INSURANCE_AI_OIDC_ISSUER:-http://localhost:8180/realms/insurance-ai}
+      INSURANCE_AI_OTLP_ENDPOINT: http://otel-collector:4318
+      INSURANCE_AI_OTEL_SYSLOG_HOST: otel-collector
+      INSURANCE_AI_OTEL_SYSLOG_PORT: "5514"
+    # Misma razon que en el servicio `backend`: Logback resuelve el hostname local al configurarse
+    # y sin este valor la aplicacion no arranca si el DNS embebido falla.
+    hostname: backend-openai
+    ports:
+      # 18081 en el host para no chocar ni con el backend fake (18080) ni con la aplicacion ajena
+      # que ya ocupa el 8080 en esta maquina.
+      - "18081:8080"
+    networks:
+      - insurance-ai-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M

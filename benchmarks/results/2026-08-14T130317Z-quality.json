@@ -1,0 +1,79 @@
+{
+  "benchmark": "quality",
+  "environment": {
+    "captured_at": "2026-08-14T13:03:15.855222+00:00",
+    "git_commit": "fe57b45",
+    "host_os": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.4",
+    "environment_name": "local-docker-desktop",
+    "environment_notes": "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host.",
+    "llm_provider": "fake",
+    "semantic_similarity_threshold": "0.45",
+    "corpus": {
+      "curated_corpus_documents_on_disk": 26,
+      "curated_corpus_documents_in_db": 26,
+      "curated_corpus_chunks": 1650,
+      "search_space_documents": 44,
+      "search_space_chunks": 2037,
+      "search_space_embeddings": 2037
+    }
+  },
+  "topology": "waf",
+  "dataset": "docs/testing/evaluation_dataset.csv",
+  "measurement_caveats": [
+    "El proveedor LLM activo determina si estas cifras son extrapolables. Con `fake`, la rama semantica usa FakeEmbeddingModelAdapter (hashing de bolsa de palabras), no un modelo de embeddings real: las cifras son medidas reales de ESTE despliegue, no una prediccion del rendimiento con embeddings de produccion.",
+    "No se evalua la redaccion de la respuesta: con el proveedor fake el texto es un sustituto fijo. Cualquier metrica de calidad de redaccion seria UNKNOWN.",
+    "El ranking compite contra TODO el espacio de busqueda embebido, no solo contra el corpus curado - ver environment.corpus en este mismo fichero."
+  ],
+  "requests_failed": [],
+  "latency": {
+    "count": 6,
+    "min_ms": 232.41,
+    "p50_ms": 423.54,
+    "p75_ms": 454.64,
+    "p90_ms": 517.54,
+    "p95_ms": 771.58,
+    "p99_ms": 771.58,
+    "max_ms": 771.58,
+    "mean_ms": 469.81,
+    "stdev_ms": 175.86
+  },
+  "summary": {
+    "cases_executed": 6,
+    "cases_answered_by_api": 6,
+    "overall_accuracy": 1.0,
+    "by_expected_behaviour": {
+      "GROUNDED": {
+        "cases": 6,
+        "correct": 6,
+        "accuracy": 1.0
+      }
+    },
+    "citation_presence_on_grounded_answers": 1.0,
+    "retrieval": {
+      "cases_with_expected_document": 6,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.1667,
+      "recall_at_5": 0.3333,
+      "recall_at_8": 0.3333,
+      "mrr": 0.1167,
+      "empty_retrieval_rate": 0.0
+    },
+    "by_category": {
+      "cobertura": {
+        "cases": 6,
+        "accuracy": 1.0
+      }
+    },
+    "by_difficulty": {
+      "baja": {
+        "cases": 3,
+        "accuracy": 1.0
+      },
+      "media": {
+        "cases": 3,
+        "accuracy": 1.0
+      }
+    }
+  }
+}

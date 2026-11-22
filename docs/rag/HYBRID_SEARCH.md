@@ -204,7 +204,98 @@ semantic branch is untouched; hybrid search only *adds* a second, independent gr
 - `rrf-k`, `candidate-pool-size`, `final-top-k`, and `RuleBasedReranker`'s keyword-coverage boost
   weight are PoC starting points, not scientifically tuned (see ADR-006).
 - `'english'` full-text search configuration is not tuned for insurance-domain terminology.
+  **On the Spanish corpus this is not a tuning nicety but a functional defect - see section 12.**
 - `QueryExpander`'s synonym map is small and illustrative, not a reviewed insurance thesaurus.
 - No Maximal Marginal Relevance / full document-diversity optimization (a simple per-section cap
   is used instead).
-- `RetrievalDiagnostics` is logged but not yet persisted for audit/evaluation (FASE 9/10).
+- `RetrievalDiagnostics` is logged but not yet persisted for audit/evaluation (FASE 9/10). Only
+  three of its five stage counts reach `ai_audit_records` (semantic, lexical, final); the fused
+  and reranked counts exist solely in the application log, which is why
+  `scripts/audit_retrieval_funnel.py` reads the log rather than the database.
+
+## 12. Measured defect: the lexical branch contributes nothing on the Spanish corpus
+
+Status: **open defect, measured not assumed.** Reproduce with
+`scripts/calibrate_lexical_search.py` and `scripts/audit_retrieval_funnel.py`.
+
+Against the running stack (26-document Spanish corpus, 2.037 embedded chunks), across the **248
+retrievals** of a full 255-case evaluation run:
+
+| Stage | Mean candidates | Retrievals returning 0 |
+|---|---|---|
+| semantic | 4,12 | 70 / 248 |
+| lexical | **0,05** | **239 / 248 (96,4 %)** |
+| fused | 4,15 | 69 / 248 |
+| reranked | 4,15 | 69 / 248 |
+| final | 4,14 | 69 / 248 |
+
+The lexical branch contributed at least one candidate in **9 of 248 retrievals (3,6 %)**, and was
+the *only* contributing branch exactly once. Hybrid search is therefore semantic-only in practice:
+`ScoreFusion` almost never has a second list to fuse, and `fused` tracks `semantic` throughout. Any
+statement that this system performs hybrid retrieval describes the code, not the measured
+behaviour.
+
+### 12.1 Root cause
+
+Two independent causes compound, and they must not be conflated:
+
+1. **Wrong text search configuration.** Spanish content is indexed with `to_tsvector('english',
+   ...)`. English stop-word removal does not recognise Spanish function words, and English
+   stemming does not fold Spanish accents. The question *"¿Qué cubre la modalidad de terceros
+   básico?"* produces the lexemes `'qué' & 'cubr' & 'la' & 'modalidad' & 'de' & 'tercero' &
+   'básico'` - `la`, `de` and `qué` survive as *required* terms. The `spanish` configuration
+   reduces the same question to `'cubr' & 'modal' & 'tercer' & 'basic'`.
+2. **AND semantics.** `websearch_to_tsquery` joins every lexeme with `&`, so a chunk must contain
+   *all* of them to match at all. For a natural-language question that is a very strong demand,
+   and it is the dominant cause: switching to `spanish` alone does **not** repair the branch.
+
+The index itself is healthy - the single term `franquicia` matches 204 chunks, and `franquicia
+lunas` matches 21. The failure is entirely in query construction.
+
+### 12.2 What was measured
+
+30 real `GROUNDED` questions from `docs/testing/evaluation_dataset.csv`, top-8 per strategy:
+
+| Strategy | Questions matching anything | Expected document in top-8 |
+|---|---|---|
+| `english` + AND (**deployed**) | 0 / 30 | 0 % |
+| `spanish` + AND | 1 / 30 | 3 % |
+| `english` + OR | 30 / 30 | 60 % |
+| `spanish` + OR | 30 / 30 | **73 %** |
+
+### 12.3 Why the obvious fix was rejected
+
+`spanish` + OR looks like the answer, and as a *retrieval* change it is. It was **not** adopted,
+because the lexical rank is not only a ranking signal - `AskInsuranceKnowledgeUseCase` grounds an
+answer when a candidate clears the semantic threshold **or** clears
+`insurance-ai.rag.lexical.min-rank`. That threshold was calibrated under AND semantics, where an
+out-of-corpus question matched zero chunks and the threshold never had to discriminate anything.
+
+Under OR semantics every question matches something, so `min-rank` becomes the only barrier
+between an unanswerable question and a confidently grounded answer. Measuring both populations
+(`scripts/calibrate_lexical_or_threshold.py`, 40 in-corpus vs 40 out-of-corpus questions):
+
+| Population | min | median | max |
+|---|---|---|---|
+| In corpus (`GROUNDED`) | 0,2000 | 0,6000 | 1,2000 |
+| Out of corpus (`NO_ANSWER`) | 0,1000 | 0,2500 | 0,5000 |
+
+The distributions **overlap**: 35 of 40 out-of-corpus questions score above the weakest legitimate
+question. **No separating threshold exists.** Adopting OR semantics while leaving the grounding
+rule untouched would trade a broken lexical branch for false grounded answers on questions the
+corpus cannot answer - a strictly worse failure, and one that would have looked like an
+improvement in every retrieval metric while degrading the 58 `NO_ANSWER` cases.
+
+### 12.4 Recommended fix
+
+Correcting this requires a design change, not a configuration change, and both parts are needed:
+
+1. Reindex `content_tsv` with the `spanish` configuration (new Flyway migration; the column is
+   `GENERATED ALWAYS ... STORED`, so redefining it recomputes every row - no re-embedding).
+2. Adopt OR semantics **and simultaneously** demote the lexical branch to a fusion-only signal:
+   let it contribute candidates to RRF, but stop letting `min-rank` alone justify grounding.
+   Grounding would then rest on the semantic threshold and the reranker, which is where the
+   evidence says the discriminating signal actually lives.
+
+Until both land together, the `english` + AND configuration is retained deliberately: it is inert
+rather than actively harmful, and it fails safe.

@@ -124,6 +124,31 @@ public class HybridRetrievalService {
         List<RetrievedChunk> semanticResults = semantic.succeeded() ? semantic.results() : List.of();
         List<LexicalSearchResult> lexicalResults = lexical.succeeded() ? lexical.results() : List.of();
 
+        // A degraded branch that leaves NO evidence at all is not a "no answer" - it is a failure
+        // wearing a no-answer's clothes, and the two must never look alike to a caller or to the
+        // audit trail.
+        //
+        // Measured against a real OpenAI outage (HTTP 429 insufficient_quota): the semantic branch
+        // threw, the lexical branch "succeeded" while returning zero rows, and the request came
+        // back as HTTP 200 "I do not have sufficient information in the available documentation",
+        // audited as NO_ANSWER. That tells the user the documentation lacks the answer when in
+        // fact nothing was ever consulted, inflates rag.no_answer.count during an outage, and
+        // writes a compliance record (AI Act, FASE 9) asserting a retrieval result that never
+        // happened - while outcome=ERROR never fires, so monitoring cannot tell a corpus gap from
+        // a provider being down.
+        //
+        // Only this exact combination is affected: a branch that FAILED plus zero surviving
+        // evidence. When both branches succeed and simply find nothing, that remains a genuine
+        // NO_ANSWER and is untouched - which is why the fake-provider baselines, where the lexical
+        // branch returns zero rows but succeeds, measure identically before and after this change.
+        if ((!semantic.succeeded() || !lexical.succeeded())
+                && semanticResults.isEmpty() && lexicalResults.isEmpty()) {
+            throw new TransientProcessingException("HYBRID_RETRIEVAL_DEGRADED_NO_EVIDENCE",
+                    "A retrieval branch failed and the surviving branch returned no candidates, "
+                            + "so no evidence was available to answer from",
+                    semantic.succeeded() ? lexical.error() : semantic.error());
+        }
+
         List<HybridRetrievalResult> fused = scoreFusion.fuse(semanticResults, lexicalResults, config.hybrid().rrfK());
         List<HybridRetrievalResult> candidatePool = fused.stream().limit(config.hybrid().candidatePoolSize()).toList();
 

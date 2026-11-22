@@ -383,6 +383,49 @@ def backend_property(name: str) -> str | None:
         return None
 
 
+def _psql(sql: str) -> str | None:
+    try:
+        completed = subprocess.run(
+            ["docker", "exec", "insurance-ai-postgres", "psql", "-U", "insurance_ai",
+             "-d", "insurance_ai", "-t", "-A", "-c", sql],
+            capture_output=True, text=True, timeout=60)
+        return completed.stdout.strip() if completed.returncode == 0 else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def corpus_snapshot() -> dict:
+    """The curated corpus and the retrieval search space are two different numbers.
+
+    Retrieval ranks over every embedded chunk in the database, which includes documents left
+    behind by earlier benchmark and E2E runs. Recording only the curated corpus size would imply
+    the ranker had less to choose from than it really did, so both are captured and neither is
+    presented as the other. See scripts/audit_corpus_state.py.
+    """
+    corpus_files = sorted((REPO_ROOT / "test-data" / "insurance" / "auto").rglob("*.pdf"))
+    corpus_names = {p.stem.replace("-", " ").title() for p in corpus_files}
+    quoted = ",".join("'" + n.replace("'", "''") + "'" for n in sorted(corpus_names)) or "''"
+
+    def as_int(value: str | None) -> int | None:
+        try:
+            return int(value) if value is not None and value != "" else None
+        except ValueError:
+            return None
+
+    return {
+        "curated_corpus_documents_on_disk": len(corpus_files),
+        "curated_corpus_documents_in_db": as_int(
+            _psql(f"select count(*) from documents where name in ({quoted});")),
+        "curated_corpus_chunks": as_int(
+            _psql("select count(*) from document_chunks c join documents d on d.id = c.document_id "
+                  f"where d.name in ({quoted});")),
+        "search_space_documents": as_int(_psql("select count(*) from documents;")),
+        "search_space_chunks": as_int(_psql("select count(*) from document_chunks;")),
+        "search_space_embeddings": as_int(
+            _psql("select count(embedding) from public.vector_store;")),
+    }
+
+
 def environment_snapshot(config: dict) -> dict:
     return {
         "captured_at": datetime.now(timezone.utc).isoformat(),
@@ -394,6 +437,7 @@ def environment_snapshot(config: dict) -> dict:
         "llm_provider": backend_provider(),
         "semantic_similarity_threshold": backend_property("INSURANCE_AI_RAG_SEMANTIC_SIMILARITY_THRESHOLD")
                                           or "0.75 (default from application.yaml)",
+        "corpus": corpus_snapshot(),
     }
 
 

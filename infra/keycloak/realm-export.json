@@ -65,25 +65,25 @@
   ],
   "users": [
     {
-      "username": "marina.user",
+      "username": "alice.user",
       "enabled": true,
       "emailVerified": true,
       "requiredActions": [],
-      "firstName": "Marina",
+      "firstName": "Alice",
       "lastName": "User",
-      "email": "marina.user@example-insurer.test",
-      "credentials": [ { "type": "password", "value": "marina-password", "temporary": false } ],
+      "email": "alice.user@example-insurer.test",
+      "credentials": [ { "type": "password", "value": "alice-password", "temporary": false } ],
       "realmRoles": [ "AI_USER" ]
     },
     {
-      "username": "marcos.governance",
+      "username": "bob.governance",
       "enabled": true,
       "emailVerified": true,
       "requiredActions": [],
-      "firstName": "Marcos",
+      "firstName": "Bob",
       "lastName": "Governance",
-      "email": "marcos.governance@example-insurer.test",
-      "credentials": [ { "type": "password", "value": "marcos-password", "temporary": false } ],
+      "email": "bob.governance@example-insurer.test",
+      "credentials": [ { "type": "password", "value": "bob-password", "temporary": false } ],
       "realmRoles": [ "AI_GOVERNANCE_ADMIN" ]
     },
     {
@@ -98,14 +98,14 @@
       "realmRoles": [ "AI_AUDITOR" ]
     },
     {
-      "username": "david.evaluator",
+      "username": "dave.evaluator",
       "enabled": true,
       "emailVerified": true,
       "requiredActions": [],
-      "firstName": "David",
+      "firstName": "Dave",
       "lastName": "Evaluator",
-      "email": "david.evaluator@example-insurer.test",
-      "credentials": [ { "type": "password", "value": "david-password", "temporary": false } ],
+      "email": "dave.evaluator@example-insurer.test",
+      "credentials": [ { "type": "password", "value": "dave-password", "temporary": false } ],
       "realmRoles": [ "AI_EVALUATION_ADMIN" ]
     }
   ]
