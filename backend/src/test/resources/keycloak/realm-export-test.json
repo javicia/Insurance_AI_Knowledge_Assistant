@@ -1,0 +1,23 @@
+{
+  "realm": "insurance-ai-test",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      { "name": "AI_USER" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "test-client",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "test-client-secret"
+    }
+  ]
+}

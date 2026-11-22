@@ -1,0 +1,72 @@
+.document-upload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-4);
+
+  &__dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--app-space-2);
+    padding: var(--app-space-6);
+    border: 2px dashed var(--app-color-border);
+    border-radius: var(--app-radius-lg);
+    color: var(--app-color-text-secondary);
+    text-align: center;
+    transition: border-color 120ms ease, background-color 120ms ease;
+
+    mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+      color: var(--app-color-text-muted);
+    }
+
+    &--dragging {
+      border-color: var(--app-color-accent);
+      background: var(--app-color-accent-soft);
+    }
+
+    &--has-file {
+      border-style: solid;
+      border-color: var(--app-color-accent);
+    }
+  }
+
+  &__filename {
+    font-weight: 600;
+    color: var(--app-color-text-primary);
+    margin: 0;
+  }
+
+  &__browse {
+    color: var(--app-color-accent);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__error {
+    margin: 0;
+    color: var(--app-color-danger);
+    font-size: 12px;
+  }
+
+  &__fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0 var(--app-space-3);
+  }
+
+  button[type='submit'] {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--app-space-1);
+  }
+}

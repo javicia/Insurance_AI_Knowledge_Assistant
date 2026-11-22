@@ -1,0 +1,138 @@
+<div class="governance-page">
+  <header class="governance-page__header">
+    <h1>Governance</h1>
+    <p>What this AI system is for, how it is governed, and who is accountable.</p>
+  </header>
+
+  @if (!loading() && !aiSystem()) {
+    <app-empty-state icon="verified_user" title="No AI system registered" />
+  }
+
+  @if (aiSystem(); as system) {
+    <section class="governance-card governance-card--system">
+      <div class="governance-card__title-row">
+        <h2>{{ system.name }}</h2>
+        <app-status-badge [label]="system.riskClassification" [variant]="riskVariant(system.riskClassification)" />
+        <app-status-badge [label]="system.status" [variant]="lifecycleVariant(system.status)" />
+      </div>
+      <p class="governance-card__purpose">{{ system.purpose }}</p>
+
+      <dl class="governance-card__facts">
+        <dt>Owner</dt>
+        <dd>{{ system.owner }}</dd>
+        <dt>Intended use</dt>
+        <dd>{{ system.intendedUse }}</dd>
+        <dt>Prohibited use</dt>
+        <dd>{{ system.prohibitedUse }}</dd>
+      </dl>
+
+      <div class="governance-card__oversight">
+        <h3>Human oversight</h3>
+        <app-status-badge
+          [label]="system.humanOversight.required ? 'Required' : 'Not required'"
+          [variant]="system.humanOversight.required ? 'warning' : 'neutral'"
+        />
+        <dl class="governance-card__facts">
+          <dt>When required</dt>
+          <dd>{{ system.humanOversight.whenRequired }}</dd>
+          <dt>Escalation condition</dt>
+          <dd>{{ system.humanOversight.escalationCondition }}</dd>
+          <dt>Decision responsibility</dt>
+          <dd>{{ system.humanOversight.decisionResponsibility }}</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="governance-card">
+      <h2>Model Registry</h2>
+      @if (models().length === 0) {
+        <app-empty-state icon="smart_toy" title="No models registered" />
+      } @else {
+        <table class="governance-table">
+          <thead>
+            <tr>
+              <th scope="col">Provider</th>
+              <th scope="col">Model</th>
+              <th scope="col">Version</th>
+              <th scope="col">Capabilities</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (model of models(); track trackById($index, model)) {
+              <tr>
+                <td>{{ model.provider }}</td>
+                <td>{{ model.modelIdentifier }}</td>
+                <td>{{ model.version ?? '—' }}</td>
+                <td>{{ model.capabilities }}</td>
+                <td><app-status-badge [label]="model.status" [variant]="lifecycleVariant(model.status)" /></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+
+    <section class="governance-card">
+      <h2>Prompt Registry</h2>
+      @if (prompts().length === 0) {
+        <app-empty-state icon="description" title="No prompts registered" />
+      } @else {
+        <div class="governance-prompt-list">
+          @for (prompt of prompts(); track trackById($index, prompt)) {
+            <mat-expansion-panel class="governance-prompt">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  {{ prompt.promptKey }} · v{{ prompt.version }}
+                </mat-panel-title>
+                <mat-panel-description>
+                  <app-status-badge [label]="prompt.status" [variant]="lifecycleVariant(prompt.status)" />
+                </mat-panel-description>
+              </mat-expansion-panel-header>
+              <dl class="governance-card__facts">
+                <dt>Author</dt>
+                <dd>{{ prompt.author }}</dd>
+                <dt>Effective date</dt>
+                <dd>{{ prompt.effectiveDate }}</dd>
+                <dt>Change reason</dt>
+                <dd>{{ prompt.changeReason }}</dd>
+                <dt>Checksum (SHA-256)</dt>
+                <dd><code>{{ prompt.checksum }}</code></dd>
+              </dl>
+            </mat-expansion-panel>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="governance-card">
+      <h2>Risk Assessments</h2>
+      @if (riskAssessments().length === 0) {
+        <app-empty-state icon="fact_check" title="No risk assessments recorded" />
+      } @else {
+        <div class="governance-prompt-list">
+          @for (assessment of riskAssessments(); track trackById($index, assessment)) {
+            <mat-expansion-panel class="governance-prompt">
+              <mat-expansion-panel-header>
+                <mat-panel-title>{{ assessment.classification }} · {{ assessment.reviewer }}</mat-panel-title>
+                <mat-panel-description>
+                  <app-status-badge [label]="assessment.status" [variant]="lifecycleVariant(assessment.status)" />
+                </mat-panel-description>
+              </mat-expansion-panel-header>
+              <dl class="governance-card__facts">
+                <dt>Rationale</dt>
+                <dd>{{ assessment.rationale }}</dd>
+                <dt>Controls</dt>
+                <dd>{{ assessment.controls }}</dd>
+                <dt>Residual risk</dt>
+                <dd>{{ assessment.residualRisk }}</dd>
+                <dt>Assessment date</dt>
+                <dd>{{ assessment.assessmentDate }}</dd>
+              </dl>
+            </mat-expansion-panel>
+          }
+        </div>
+      }
+    </section>
+  }
+</div>

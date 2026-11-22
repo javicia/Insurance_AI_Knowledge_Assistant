@@ -1,0 +1,16 @@
+{
+  "variant": "semantic",
+  "model": "nomic-embed-text:latest",
+  "ranked_cases": 153,
+  "recall_at_1": 0.3268,
+  "recall_at_3": 0.6667,
+  "recall_at_5": 0.7974,
+  "recall_at_8": 0.8431,
+  "mrr": 0.5095,
+  "latency_ms": {
+    "p50": 2305.6,
+    "p95": 2354.9,
+    "p99": 2489.2,
+    "mean": 2312.4
+  }
+}

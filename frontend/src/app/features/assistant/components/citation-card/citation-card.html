@@ -1,0 +1,15 @@
+<article class="citation-card">
+  <mat-icon class="citation-card__icon" fontSet="material-symbols-rounded" aria-hidden="true">description</mat-icon>
+  <div class="citation-card__body">
+    <p class="citation-card__document">{{ source().document }}</p>
+    <p class="citation-card__meta">
+      Version {{ source().version }}
+      @if (source().page !== null) {
+        · Page {{ source().page }}
+      }
+    </p>
+    @if (source().section) {
+      <p class="citation-card__section">{{ source().section }}</p>
+    }
+  </div>
+</article>

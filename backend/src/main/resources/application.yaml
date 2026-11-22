@@ -1,0 +1,357 @@
+spring:
+  application:
+    name: insurance-knowledge-assistant
+  http:
+    clients:
+      # FASE 11: bounds every auto-configured RestClient/WebClient (including Spring AI's OpenAI/
+      # Anthropic HTTP clients) so a provider outage/hang cannot leave a POST /api/chat request
+      # blocked indefinitely - see docs/resilience/RESILIENCE.md.
+      connect-timeout: 5s
+      read-timeout: 30s
+  ai:
+    model:
+      # FASE 31. Decides WHICH Spring AI embedding autoconfiguration activates. Both the OpenAI
+      # and the Ollama starters are on the classpath, and each would contribute an
+      # `EmbeddingModel` bean; without this property the injection in the embedding adapters is
+      # ambiguous and the context fails to start.
+      #
+      # MUST agree with insurance-ai.ai.embedding-provider:
+      #   embedding-provider: fake    -> spring.ai.model.embedding: none
+      #   embedding-provider: openai  -> spring.ai.model.embedding: openai
+      #   embedding-provider: ollama  -> spring.ai.model.embedding: ollama
+      #
+      # EmbeddingProviderConfiguration verifies this at startup and fails with an explanatory
+      # message, because the dangerous direction does NOT fail on its own: ollama+openai would
+      # produce OpenAI vectors labelled as Ollama, corrupting the stored embedding identity and
+      # spending money on an API this project forbids.
+      embedding: ${SPRING_AI_MODEL_EMBEDDING:openai}
+    ollama:
+      # Local inference endpoint. Never a public address: the embedding service must not be
+      # exposed beyond the host (FASE 30 security review).
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        options:
+          model: ${INSURANCE_AI_EMBEDDING_MODEL:bge-m3:latest}
+      init:
+        # Do NOT let Spring AI pull models on startup. A pull is a multi-hundred-megabyte network
+        # operation that would turn a misconfigured model name into a silent download instead of
+        # a fast, readable failure.
+        pull-model-strategy: never
+    retry:
+      # Spring AI auto-configures a RetryTemplate around every ChatModel#call (spring-ai-
+      # autoconfigure-retry) - its own defaults (10 attempts, backoff up to 3 minutes between
+      # attempts) are tuned for a batch/background caller, not a synchronous POST /api/chat
+      # request, where a caller should get a definitive answer or a 502/503 in a few seconds.
+      # on-client-errors is left at its default (false): a 4xx is not retry-safe and is
+      # classified as such by OpenAiLlmAdapter/AnthropicLlmAdapter - see
+      # docs/resilience/RESILIENCE.md.
+      max-attempts: 3
+      backoff:
+        initial-interval: 500ms
+        multiplier: 2
+        max-interval: 3s
+    # Spring AI's OpenAI/Anthropic auto-configuration requires a non-empty credential to even
+    # build its client beans, regardless of whether a model call is ever made - the placeholder
+    # below only lets the application context boot cleanly without real API keys. Real keys are
+    # supplied via the OPENAI_API_KEY / ANTHROPIC_API_KEY environment variables (see
+    # .env.example) and never committed.
+    #
+    # FASE 5 update: LlmProvider adapter selection (OpenAiLlmAdapter/AnthropicLlmAdapter) is now
+    # conditional on insurance-ai.ai.provider (only the selected one becomes a Spring bean), so
+    # a wrong/missing OpenAI key never breaks an Anthropic-configured deployment's chat flow.
+    # It does NOT remove the OpenAI key requirement entirely, though: embeddings always use
+    # OpenAI regardless of the chat provider, because Anthropic has no embeddings API - see
+    # docs/rag/EMBEDDINGS.md. This is a real technical constraint, not a leftover TODO.
+    openai:
+      api-key: ${OPENAI_API_KEY:not-configured}
+      embedding:
+        # 1536 dimensions - see docs/rag/EMBEDDINGS.md and V3__vector_store.sql's embedding
+        # column width, which must match exactly.
+        model: text-embedding-3-small
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:not-configured}
+    vectorstore:
+      pgvector:
+        # Schema ownership belongs to Flyway (db/migration), not Spring AI's own schema
+        # auto-initialization: the vector_store table itself is created by a dedicated
+        # V3__vector_store.sql migration once the VectorStore adapter is implemented in
+        # FASE 5, not by this starter reaching for the database on its own (brief section 36).
+        initialize-schema: false
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/insurance_ai}
+    username: ${POSTGRES_USER:insurance_ai}
+    password: ${POSTGRES_PASSWORD:insurance_ai}
+    hikari:
+      # FASE 26 resilience finding, measured against the real stack: with PostgreSQL stopped, a
+      # POST /api/chat did not fail - it *hung*, and the caller eventually received an opaque
+      # `504 Gateway Time-out` from the WAF rather than this application's own, meaningful
+      # `503 SERVICE_UNAVAILABLE`. Cause: HikariCP's default connection-timeout is 30s, which is
+      # not below the gateway's own 30s response-timeout (gateway application.yaml), so the edge
+      # gave up first and the backend's InfrastructureException -> 503 mapping never got to run.
+      # 5s is comfortably inside that budget: a healthy local/VPC PostgreSQL connects in
+      # milliseconds, so this only ever trips when the database really is unreachable, and it
+      # then surfaces as a fast, correct 503 with a traceId the caller can quote.
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Internal Docker network address (fast, reliable) - deliberately NOT the same value
+          # as insurance-ai.security.oauth2.issuer below, see that property's Javadoc for why.
+          jwk-set-uri: ${INSURANCE_AI_OIDC_JWK_SET_URI:http://localhost:8180/realms/insurance-ai/protocol/openid-connect/certs}
+  kafka:
+    # EXTERNAL listener of the docker-compose Kafka broker (see docker-compose.yml). Tests
+    # override this via Testcontainers' @ServiceConnection, never talking to this address.
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # Same FASE 26 finding as spring.datasource.hikari.connection-timeout above, measured the
+        # same way: with Kafka stopped, uploading a new document hung and the caller got the WAF's
+        # `504 Gateway Time-out`. Cause: the producer's default `max.block.ms` is 60s (it blocks
+        # waiting for cluster metadata), far beyond the gateway's 30s response-timeout, so the
+        # edge always gave up first. Bounded well inside that budget so an unreachable broker
+        # surfaces as this application's own fast 503 instead.
+        max.block.ms: 5000
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
+    consumer:
+      group-id: insurance-ai-document-processor
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # Wraps JsonDeserializer so a malformed record is handed to the error handler instead of
+      # crashing the consumer thread.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        # Only this package's events may be deserialized - defensive against deserializing
+        # arbitrary classes from untrusted producers (brief section 19's spirit applied to
+        # messaging, not just LLM input).
+        spring.json.trusted.packages: com.rag.springai.insuranceai.adapters.shared.messaging
+    template:
+      # FASE 25: emits a real producer span (Observation API) around every KafkaTemplate#send -
+      # DocumentEventPublisher's Kafka publish now participates in the same trace as the HTTP
+      # request that triggered it, not a disconnected background operation.
+      observation-enabled: true
+    listener:
+      # FASE 25: emits a real consumer span around every @KafkaListener invocation, with the
+      # producer's trace context propagated via the message headers (W3C traceparent), not
+      # restarted as a new, unrelated trace.
+      observation-enabled: true
+
+insurance-ai:
+  rag:
+    # Initial PoC parameters, not scientifically tuned - to be calibrated against real
+    # relevance/faithfulness metrics in FASE 10 (Evaluation). See docs/rag/HYBRID_SEARCH.md.
+    semantic:
+      top-k: 8
+      # FASE 5's original production value, unchanged - calibrated against real OpenAI
+      # embeddings, never lowered to accommodate the fake/test embedding provider (see
+      # RagPipelineIntegrationTest's own @TestPropertySource override instead).
+      similarity-threshold: 0.75
+    lexical:
+      top-k: 8
+      # FASE 26: calibrated against REAL ts_rank_cd distributions measured on the ingested corpus
+      # (the exact query in calibrate_lexical_min_rank.sql, run against the live database), which
+      # replaced the previous uncalibrated 0.0 placeholder. Measured, 14 questions:
+      #
+      #   out-of-corpus (6/6): ZERO matching chunks - rank never even computed
+      #   in-corpus     (6/8): 1-2 matching chunks, ts_rank_cd from 0.0909 to 0.375
+      #
+      # The measurement's most important finding is that this threshold is NOT what separates
+      # grounded from ungrounded: `websearch_to_tsquery` is AND-semantics, so a question
+      # containing any term absent from the corpus fails `content_tsv @@ query` outright and
+      # produces no row to rank. Every out-of-corpus question was rejected by the match operator
+      # itself, at any threshold. Raising this value can therefore only ever remove TRUE
+      # positives - anything above the measured 0.0909 floor would start refusing genuine
+      # evidence.
+      #
+      # 0.05 is chosen deliberately below that floor (1.8x margin against the weakest real match
+      # observed), so it changes no measured outcome today, while still rejecting a degenerate
+      # rank-0.0 match and giving defence in depth if the matching semantics are ever loosened
+      # (e.g. a switch to OR-semantics `to_tsquery`, under which weak partial matches WOULD start
+      # arriving and this threshold would become load-bearing). Re-measure before assuming these
+      # numbers hold for a different corpus. See docs/rag/HYBRID_SEARCH.md.
+      min-rank: 0.05
+      # FASE 28. The "if the matching semantics are ever loosened" caveat above is now the actual
+      # configuration: V8__spanish_full_text_search.sql + PostgresLexicalSearchAdapter retrieve
+      # with Spanish OR-semantics, so weak partial matches DO arrive. The same measurement that
+      # motivated the switch also showed min-rank cannot be what gates them - ts_rank_cd is
+      # unnormalized, so it has no transferable "good enough" value. Measured on the auto corpus
+      # (spanish_unaccent config, OR-semantics, best candidate per question):
+      #
+      #   out-of-corpus  "seguro de hogar / inundaciones"   rank 2.000   coverage 0.40
+      #   out-of-corpus  "beneficiarios de seguro de vida"  rank 1.000   coverage 0.25
+      #   out-of-corpus  "capital de Francia"               no matching chunks
+      #   in-corpus      "franquicia de la luna"            rank 2.400   coverage 0.67
+      #   in-corpus      "responsabilidad civil obligatoria" rank 4.000  coverage 1.00
+      #
+      # Note the overlap on rank (out-of-corpus 2.000 vs in-corpus 2.400) against a clean
+      # separation on coverage (<=0.40 vs >=0.67). 0.6 sits inside that gap. Coverage is a
+      # fraction of the question's own lexemes, so unlike min-rank it is scale-free and a single
+      # value transfers across questions - but the GAP is corpus-specific, so re-measure before
+      # assuming 0.6 holds elsewhere. See docs/rag/AUDITORIA_RAG_ES.md.
+      min-term-coverage: 0.6
+    hybrid:
+      # Candidates carried into reranking, before the final-top-k cut.
+      candidate-pool-size: 20
+      final-top-k: 8
+      # Reciprocal Rank Fusion smoothing constant - 60 is the original RRF paper's (Cormack et
+      # al., 2009) value, a reasonable PoC starting point, not independently re-derived here.
+      rrf-k: 60
+    reranking:
+      enabled: true
+    query-expansion:
+      enabled: false
+      max-expanded-terms: 3
+    context:
+      # PoC approximation of a context window budget - character count, not real token
+      # counting. See docs/rag/HYBRID_SEARCH.md.
+      max-characters: 6000
+    # FASE 28. When the documentation holds no sufficient evidence, optionally answer from the
+    # LLM's own general knowledge instead of returning NO_ANSWER - clearly labelled
+    # GENERAL_AI_UNVERIFIED and never carrying citations.
+    #
+    # Ships DISABLED. This is not caution for its own sake: enabling it forwards questions to a
+    # third-party provider on a path whose answers have no documentary backing, so it changes
+    # both the data-processing posture and the per-query cost profile. A deployment should turn
+    # it on deliberately, after reviewing docs/rag/ESTRATEGIA_FALLBACK_IA_ES.md, not inherit it.
+    #
+    # Note that enabling it does NOT permit contractual answers: GeneralAiFallbackPolicy refuses
+    # questions asking for a determination about a specific policy, coverage, exclusion,
+    # deductible, indemnity or eligibility regardless of this setting, and there is deliberately
+    # no property to override that.
+    general-ai-fallback:
+      enabled: false
+      # FASE 29 (closes FASE 28's DEF-08). Spend caps in the same currency unit as
+      # insurance-ai.benchmark.pricing. GeneralAiBudgetLedger reserves the WORST CASE
+      # (max-tokens-per-request priced at the output rate) before the provider is called, then
+      # reconciles down to the reported usage - counting spend afterwards cannot enforce a limit,
+      # because the money is already gone and two concurrent requests both see the same headroom.
+      #
+      # These are deliberately small: they are a safety net for a PoC, not a capacity plan. A
+      # deployment must set them from its own tariff and expected volume. There is no "unlimited"
+      # value - the properties are mandatory, because an unbounded fallback has no safe default.
+      daily-budget: "1.00"
+      monthly-budget: "20.00"
+      # Bounds the worst case the ledger has to reserve per request. Also the only thing standing
+      # between one pathological question and a day's budget.
+      max-tokens-per-request: 2000
+      # Whether a question containing detected PII may be forwarded to the general-AI path. The
+      # grounded path tolerates PII in a question because it stays inside this system; sending it
+      # to an external provider is a different decision with a different legal basis, so it needs
+      # its own switch rather than inheriting the grounded path's tolerance.
+      allow-questions-with-pii: false
+  security:
+    prompt-injection:
+      enabled: true
+    pii:
+      enabled: true
+    oauth2:
+      # Always the browser-facing address (see the OAuth2 record's Javadoc) - identical whether
+      # the backend runs on the host or inside docker-compose, because this is what actually
+      # appears in every token's iss claim regardless of who is validating it.
+      issuer: ${INSURANCE_AI_OIDC_ISSUER:http://localhost:8180/realms/insurance-ai}
+  governance:
+    audit:
+      enabled: true
+  evaluation:
+    thresholds:
+      # PoC-level quality gate (brief FASE 10 section 10) - not scientifically calibrated,
+      # a starting point for the built-in dataset's 4 in-scope / 3 out-of-scope cases (see
+      # InsuranceEvaluationDataset). A production deployment would recalibrate these against a
+      # much larger labelled dataset before trusting them as a real regression gate.
+      min-grounding-rate: 1.0
+      min-no-answer-accuracy: 1.0
+      min-recall-at-k: 0.75
+  ai:
+    # CHAT provider: openai | anthropic | fake. "fake" selects deterministic offline adapters for
+    # environments without provider credentials (brief section 17/18) - never use in
+    # production. Overridable so local validation runs don't require editing this file.
+    #
+    # FASE 31: this property no longer selects the embedding model. It used to, and that coupling
+    # made the combination FASE 30 measured as best - local bge-m3 embeddings with a fake chat
+    # model for deterministic tests - literally inexpressible.
+    provider: ${INSURANCE_AI_PROVIDER:openai}
+    # EMBEDDING provider: fake | openai | ollama. Independent of the chat provider above.
+    #
+    # Default kept at `openai` so this change alters NO existing behaviour: before FASE 31 any
+    # non-fake chat provider selected the OpenAI embedding adapter, and the shipped default chat
+    # provider is `openai`.
+    embedding-provider: ${INSURANCE_AI_EMBEDDING_PROVIDER:openai}
+    # Only meaningful for embedding-provider=ollama, where it names the local model. It is part of
+    # the embedding IDENTITY, not a label: bge-m3 produces 1024 dimensions against the fake
+    # provider's 1536, and its cosine scale is different enough that the inherited
+    # similarity-threshold of 0.75 would reject 91 % of genuine evidence (FASE 30).
+    embedding-model: ${INSURANCE_AI_EMBEDDING_MODEL:bge-m3:latest}
+  benchmark:
+    pricing:
+      # FASE 27 (benchmarking): unit prices consumed only by LlmCostCalculator, never by the
+      # request path. REFERENCE VALUES ONLY - taken from OpenAI's published list prices for
+      # gpt-4o-mini (chat) and text-embedding-3-small (embeddings), and guaranteed to go stale:
+      # vendor prices change without notice and differ per model, region, contract and tier
+      # (cached input and batch pricing are cheaper still). Verify against the tariff actually in
+      # force for this deployment's own account and model before quoting any figure derived from
+      # them, and override here or via the environment. See LlmPricing's Javadoc.
+      input-price-per-million-tokens: 0.15
+      output-price-per-million-tokens: 0.60
+      embedding-price-per-million-tokens: 0.02
+      currency: USD
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # FASE 11: only health/info/metrics - never "*" (no env/beans/heapdump/shutdown exposed
+        # unauthenticated, matching this PoC's "no IAM introduced" stance - see
+        # docs/observability/OBSERVABILITY.md).
+        include: health,info,metrics
+  endpoint:
+    health:
+      # Never leak DB/Kafka connection details in an unauthenticated response (Boot's own
+      # default - kept explicit here so it is not accidentally loosened to "always").
+      show-details: never
+
+# FASE 25 (Distributed Tracing): `otel.*`, not `management.tracing.*`/`management.otlp.tracing.*`
+# - this project uses the OpenTelemetry-project-maintained `opentelemetry-spring-boot-starter`
+# (see backend/pom.xml's comment for the full incident: Spring Boot 4.1.0's own native tracing
+# auto-configuration module produces no real `Tracer` bean, confirmed via `/actuator/conditions`),
+# which reads this property namespace (and the equivalent `OTEL_*` env vars), not Spring's.
+otel:
+  service:
+    name: insurance-ai-backend
+  exporter:
+    otlp:
+      # Base endpoint, no `/v1/traces` suffix - the SDK autoconfigure module appends the correct
+      # per-signal path itself. The otel-collector service (docker-compose.yml) - never a direct
+      # vendor SDK dependency (Jaeger today, swappable for any OTLP-compatible backend by
+      # reconfiguring the collector alone, no application code change). Overridable for local
+      # (non-Docker) development, where the collector isn't running - see Option B in README.md.
+      endpoint: ${INSURANCE_AI_OTLP_ENDPOINT:http://localhost:4318}
+  traces:
+    sampler: always_on
+    # FASE 25: every request sampled is a deliberate PoC choice, not a production default - a
+    # real deployment would use `parentbased_traceidratio` with a fraction (e.g. 0.1) plus
+    # always-sample-on-error, to bound collector/storage volume. See
+    # docs/observability/DISTRIBUTED_TRACING.md.
+  logs:
+    # The starter's own OTLP *log* export is a separate, unused feature from this project's own
+    # syslog-based security-event pipeline (docs/security/SIEM.md) - left enabled it periodically
+    # logs harmless-but-noisy HTTP 404 warnings (the collector only exposes a /v1/traces receiver,
+    # see infra/otel/otel-collector-config.yaml), since nothing consumes a /v1/logs endpoint here.
+    # Explicitly disabled rather than left silently noisy - see
+    # docs/observability/DISTRIBUTED_TRACING.md section 9.
+    exporter: none
+  metrics:
+    # Same reasoning as `otel.logs.exporter` above, found during the same FASE 25 backend
+    # `clean verify` run: the starter also auto-exports OTLP metrics every ~30s by default, and
+    # the collector config has no `metrics` pipeline (only `traces`/`logs`) - left enabled it
+    # produces the identical "Failed to export metrics ... HTTP 404" noise every ~30s. No
+    # metrics pipeline exists in infra/otel/otel-collector-config.yaml because this PoC's
+    # observability scope is traces + security-event logs only (see
+    # docs/observability/DISTRIBUTED_TRACING.md) - a real metrics pipeline (Prometheus scrape or
+    # OTLP metrics receiver) is out of scope, not an oversight.
+    exporter: none

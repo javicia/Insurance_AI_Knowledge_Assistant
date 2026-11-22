@@ -1,0 +1,125 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: insurance-ai-gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Same internal/external URL split as the backend - see
+          # docs/security/IAM_ARCHITECTURE.md section 2 and GatewaySecurityConfiguration#jwtDecoder.
+          jwk-set-uri: ${INSURANCE_AI_OIDC_JWK_SET_URI:http://localhost:8180/realms/insurance-ai/protocol/openid-connect/certs}
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 5000
+            response-timeout: 30s
+          # Explicit routes only  - the gateway knows route paths,
+          # allowed methods, and technical policy, never Document/RAG/Governance/Audit domain
+          # concepts. Every route also caps request size (RequestSize filter) - a deliberately
+          # generous 15MB accommodates the documents route's PDF uploads; every other route's
+          # JSON bodies are tiny by comparison, but sharing one limit across all five routes is
+          # simpler than tuning five different values with no evidence any of them need to differ.
+          #
+          # NOTE: this block MUST live under `spring.cloud.gateway...` - Spring Cloud Gateway's
+          # autoconfiguration only binds routes from that exact property path. An earlier revision
+          # nested this entire block under a custom `insurance-ai:` key instead, which is a
+          # perfectly valid YAML/property tree but not one Spring Cloud Gateway reads - the
+          # RouteLocator silently ended up with zero routes, and every single request (including
+          # authenticated, syntactically valid ones) returned 404 with no error logged anywhere.
+          # Caught by manually curling every route end-to-end through the real gateway container.
+          routes:
+            - id: chat
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/chat/**
+                - Method=POST
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
+            - id: documents
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/documents/**
+                - Method=GET,POST
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
+            - id: governance
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/governance/**
+                - Method=GET,POST
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
+            - id: audit
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/audit/**
+                - Method=GET
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
+            - id: evaluation
+              uri: ${INSURANCE_AI_BACKEND_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/evaluation/**
+                - Method=GET,POST
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 15MB
+          globalcors:
+            cors-configurations:
+              "[/**]":
+                allowedOrigins: ${INSURANCE_AI_ALLOWED_ORIGIN:http://localhost:4200}
+                allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+                allowedHeaders: "*"
+                allowCredentials: true
+
+insurance-ai:
+  security:
+    oauth2:
+      issuer: ${INSURANCE_AI_OIDC_ISSUER:http://localhost:8180/realms/insurance-ai}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+#(Distributed Tracing): `otel.*`, not `management.tracing.*` - see backend/
+# application.yaml's identical comment for why (this project uses the OpenTelemetry-project-
+# maintained `opentelemetry-spring-boot-starter`, which reads this property namespace).
+otel:
+  service:
+    name: insurance-ai-gateway
+  exporter:
+    otlp:
+      endpoint: ${INSURANCE_AI_OTLP_ENDPOINT:http://localhost:4318}
+  traces:
+    sampler: always_on
+    #Matches the backend's sampling choice - see that module's application.yaml for the
+    # full reasoning (every request sampled, a deliberate PoC choice, not a production default).
+  logs:
+    # See backend/application.yaml's identical comment - the starter's own OTLP log export is
+    # unused here (this project ships security events via syslog instead, docs/security/SIEM.md).
+    exporter: none
+  metrics:
+    # See backend/application.yaml's identical comment - no `metrics` pipeline exists in
+    # infra/otel/otel-collector-config.yaml, so the starter's default OTLP metrics export just
+    # produces periodic HTTP 404 noise against the collector's traces-only receiver.
+    exporter: none

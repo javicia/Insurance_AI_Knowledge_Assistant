@@ -1,0 +1,87 @@
+{
+  "min_rank": 0.05,
+  "note": "Lexical path only unless semantic attribution supplied; see module docstring.",
+  "sweep": [
+    {
+      "min_term_coverage": 0.4,
+      "grounded_true_positive": 148,
+      "false_no_answer": 5,
+      "false_grounding": 21,
+      "correct_refusal": 37,
+      "grounded_recall": 0.9673,
+      "refusal_accuracy": 0.6379
+    },
+    {
+      "min_term_coverage": 0.45,
+      "grounded_true_positive": 134,
+      "false_no_answer": 19,
+      "false_grounding": 10,
+      "correct_refusal": 48,
+      "grounded_recall": 0.8758,
+      "refusal_accuracy": 0.8276
+    },
+    {
+      "min_term_coverage": 0.5,
+      "grounded_true_positive": 134,
+      "false_no_answer": 19,
+      "false_grounding": 10,
+      "correct_refusal": 48,
+      "grounded_recall": 0.8758,
+      "refusal_accuracy": 0.8276
+    },
+    {
+      "min_term_coverage": 0.55,
+      "grounded_true_positive": 123,
+      "false_no_answer": 30,
+      "false_grounding": 5,
+      "correct_refusal": 53,
+      "grounded_recall": 0.8039,
+      "refusal_accuracy": 0.9138
+    },
+    {
+      "min_term_coverage": 0.6,
+      "grounded_true_positive": 113,
+      "false_no_answer": 40,
+      "false_grounding": 3,
+      "correct_refusal": 55,
+      "grounded_recall": 0.7386,
+      "refusal_accuracy": 0.9483
+    },
+    {
+      "min_term_coverage": 0.65,
+      "grounded_true_positive": 92,
+      "false_no_answer": 61,
+      "false_grounding": 2,
+      "correct_refusal": 56,
+      "grounded_recall": 0.6013,
+      "refusal_accuracy": 0.9655
+    },
+    {
+      "min_term_coverage": 0.7,
+      "grounded_true_positive": 69,
+      "false_no_answer": 84,
+      "false_grounding": 2,
+      "correct_refusal": 56,
+      "grounded_recall": 0.451,
+      "refusal_accuracy": 0.9655
+    },
+    {
+      "min_term_coverage": 0.75,
+      "grounded_true_positive": 64,
+      "false_no_answer": 89,
+      "false_grounding": 2,
+      "correct_refusal": 56,
+      "grounded_recall": 0.4183,
+      "refusal_accuracy": 0.9655
+    },
+    {
+      "min_term_coverage": 0.8,
+      "grounded_true_positive": 52,
+      "false_no_answer": 101,
+      "false_grounding": 0,
+      "correct_refusal": 58,
+      "grounded_recall": 0.3399,
+      "refusal_accuracy": 1.0
+    }
+  ]
+}

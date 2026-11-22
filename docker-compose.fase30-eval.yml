@@ -1,0 +1,46 @@
+# FASE 30 - Entorno de evaluacion AISLADO para embeddings locales.
+#
+# Deliberadamente NO es un overlay de docker-compose.yml: se arranca con su propio nombre de
+# proyecto para que Compose no pueda reutilizar ni adoptar ningun recurso del stack principal.
+#
+#   docker compose -p insurance-ai-fase30-eval -f docker-compose.fase30-eval.yml up -d
+#
+# Garantias de aislamiento, cada una verificable con `docker volume ls` / `docker port`:
+#   - Volumen propio `fase30-eval-pgdata`, que con el prefijo del proyecto queda como
+#     `insurance-ai-fase30-eval_fase30-eval-pgdata`. NUNCA monta
+#     `insurance-knowledge-assistant_postgres-data`.
+#   - Puerto 5434 en el host (el stack principal publica 5433), asi que ni el backend desplegado
+#     ni este contenedor pueden alcanzarse por error.
+#   - Base de datos, usuario y contrasena distintos, de modo que una cadena de conexion copiada
+#     por equivocacion falla en lugar de escribir en el sitio equivocado.
+#   - Sin red compartida con el stack principal.
+#
+# Este entorno es DESECHABLE: contiene unicamente copias de los 26 documentos curados y sus
+# embeddings locales. Borrarlo no pierde nada que no se pueda reconstruir con
+# `scripts/fase30_ingest_local_embeddings.py`.
+services:
+  postgres-eval:
+    image: pgvector/pgvector:pg16
+    container_name: fase30-eval-postgres
+    environment:
+      POSTGRES_DB: fase30_eval
+      POSTGRES_USER: fase30_eval
+      POSTGRES_PASSWORD: fase30_eval_local_only
+    ports:
+      - "5434:5432"
+    volumes:
+      - fase30-eval-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fase30_eval -d fase30_eval"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # El corpus curado son 1.650 chunks; esto no necesita mas memoria que la de por defecto, y
+    # acotarla evita competir con los otros proyectos Docker de la maquina.
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+volumes:
+  fase30-eval-pgdata:

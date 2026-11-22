@@ -1,0 +1,8 @@
+<div class="evaluation-metrics">
+  @for (tile of tiles(); track tile.label) {
+    <div class="evaluation-metrics__tile">
+      <p class="evaluation-metrics__value">{{ tile.value }}</p>
+      <p class="evaluation-metrics__label">{{ tile.label }}</p>
+    </div>
+  }
+</div>

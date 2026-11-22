@@ -1,0 +1,26 @@
+.security-banner {
+  display: flex;
+  gap: var(--app-space-3);
+  padding: var(--app-space-4);
+  border-radius: var(--app-radius-md);
+  background: var(--app-color-danger-soft);
+  border: 1px solid color-mix(in srgb, var(--app-color-danger) 25%, transparent);
+
+  &__icon {
+    color: var(--app-color-danger);
+    flex-shrink: 0;
+  }
+
+  &__title {
+    margin: 0 0 2px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--app-color-danger);
+  }
+
+  &__message {
+    margin: 0;
+    font-size: 13px;
+    color: var(--app-color-text-secondary);
+  }
+}

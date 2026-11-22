@@ -1,0 +1,11 @@
+container,cpu_percent_mean,cpu_percent_peak,mem_mib_mean,mem_mib_peak,samples
+insurance-ai-backend,1.68,5.1,368.2,369.4,8
+insurance-ai-frontend,0.34,2.73,10.0,10.2,8
+insurance-ai-gateway,1.41,5.64,209.7,210.5,8
+insurance-ai-jaeger,0.22,1.56,10.7,10.9,8
+insurance-ai-kafka,1.92,3.28,417.6,419.2,8
+insurance-ai-kafka-ui,0.08,0.13,283.7,284.1,8
+insurance-ai-keycloak,0.97,3.59,563.9,565.0,8
+insurance-ai-otel-collector,0.18,0.26,30.3,30.5,8
+insurance-ai-postgres,1.35,5.43,54.7,54.9,8
+insurance-ai-waf,0.0,0.0,35.3,35.3,8

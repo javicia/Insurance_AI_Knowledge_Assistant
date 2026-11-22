@@ -1,0 +1,37 @@
+<div class="assistant-page">
+  <header class="assistant-page__header">
+    <div>
+      <h1 class="assistant-page__title">Insurance AI Assistant</h1>
+      <p class="assistant-page__subtitle">Ask about internal insurance knowledge</p>
+    </div>
+    <button type="button" mat-stroked-button (click)="onNewChat()" [disabled]="session.messages().length === 0">
+      <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">add</mat-icon>
+      New chat
+    </button>
+  </header>
+
+  <div class="assistant-page__body">
+    @if (session.messages().length === 0) {
+      <div class="assistant-page__intro">
+        <div class="assistant-page__intro-icon">
+          <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">forum</mat-icon>
+        </div>
+        <h2>How can I help today?</h2>
+        <p>
+          Ask a question about internal insurance documentation. Every answer is grounded in your
+          organization's ingested corporate knowledge, with citations you can verify.
+        </p>
+      </div>
+    } @else {
+      <app-message-list [messages]="session.messages()" [sending]="session.sending()" />
+    }
+  </div>
+
+  <footer class="assistant-page__composer">
+    <app-chat-composer [disabled]="session.sending()" (send)="onSend($event)" />
+    <p class="assistant-page__disclaimer">
+      Answers are based on retrieved corporate sources and may be incomplete. This assistant
+      informs; it does not make claims, pricing or eligibility decisions.
+    </p>
+  </footer>
+</div>

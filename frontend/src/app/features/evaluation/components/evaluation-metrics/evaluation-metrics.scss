@@ -1,0 +1,25 @@
+.evaluation-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--app-space-3);
+
+  &__tile {
+    padding: var(--app-space-4);
+    border-radius: var(--app-radius-md);
+    background: var(--app-color-surface-alt);
+    text-align: center;
+  }
+
+  &__value {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--app-color-accent);
+  }
+
+  &__label {
+    margin: 4px 0 0;
+    font-size: 11px;
+    color: var(--app-color-text-secondary);
+  }
+}

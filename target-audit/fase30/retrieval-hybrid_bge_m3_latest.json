@@ -1,0 +1,16 @@
+{
+  "variant": "hybrid",
+  "model": "bge-m3:latest",
+  "ranked_cases": 153,
+  "recall_at_1": 0.4314,
+  "recall_at_3": 0.6993,
+  "recall_at_5": 0.8301,
+  "recall_at_8": 0.902,
+  "mrr": 0.59,
+  "latency_ms": {
+    "p50": 2687.6,
+    "p95": 2820.3,
+    "p99": 3201.6,
+    "mean": 2716.2
+  }
+}

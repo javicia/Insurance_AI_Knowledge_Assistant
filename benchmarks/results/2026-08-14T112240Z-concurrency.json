@@ -1,0 +1,364 @@
+{
+  "benchmark": "concurrency",
+  "environment": {
+    "captured_at": "2026-08-14T11:18:42.761232+00:00",
+    "git_commit": "d6dd49e",
+    "host_os": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.4",
+    "environment_name": "local-docker-desktop",
+    "environment_notes": "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host.",
+    "llm_provider": "fake",
+    "semantic_similarity_threshold": "0.45"
+  },
+  "topology": "waf",
+  "questions_available": 80,
+  "requests_per_level": 60,
+  "phases": [
+    {
+      "name": "concurrency-1",
+      "concurrency": 1,
+      "requests": 60,
+      "successes": 60,
+      "errors": 0,
+      "error_rate": 0.0,
+      "duration_seconds": 35.14,
+      "throughput_rps": 1.71,
+      "latency": {
+        "count": 60,
+        "min_ms": 119.21,
+        "p50_ms": 569.15,
+        "p75_ms": 731.22,
+        "p90_ms": 856.47,
+        "p95_ms": 1210.66,
+        "p99_ms": 1362.43,
+        "max_ms": 1426.38,
+        "mean_ms": 585.59,
+        "stdev_ms": 288.9
+      },
+      "status_codes": {
+        "200": 60
+      },
+      "rag": {
+        "grounded": 51,
+        "not_grounded": 9,
+        "grounding_rate": 0.85,
+        "mean_citations": 4.82
+      },
+      "notes": []
+    },
+    {
+      "name": "concurrency-5",
+      "concurrency": 5,
+      "requests": 60,
+      "successes": 60,
+      "errors": 0,
+      "error_rate": 0.0,
+      "duration_seconds": 12.91,
+      "throughput_rps": 4.65,
+      "latency": {
+        "count": 60,
+        "min_ms": 450.85,
+        "p50_ms": 1039.07,
+        "p75_ms": 1367.89,
+        "p90_ms": 1596.73,
+        "p95_ms": 1665.83,
+        "p99_ms": 1670.04,
+        "max_ms": 1671.13,
+        "mean_ms": 1070.92,
+        "stdev_ms": 372.72
+      },
+      "status_codes": {
+        "200": 60
+      },
+      "rag": {
+        "grounded": 51,
+        "not_grounded": 9,
+        "grounding_rate": 0.85,
+        "mean_citations": 4.82
+      },
+      "notes": []
+    },
+    {
+      "name": "concurrency-10",
+      "concurrency": 10,
+      "requests": 60,
+      "successes": 60,
+      "errors": 0,
+      "error_rate": 0.0,
+      "duration_seconds": 5.73,
+      "throughput_rps": 10.47,
+      "latency": {
+        "count": 60,
+        "min_ms": 291.26,
+        "p50_ms": 983.85,
+        "p75_ms": 1186.08,
+        "p90_ms": 1195.05,
+        "p95_ms": 1197.54,
+        "p99_ms": 1204.42,
+        "max_ms": 1498.17,
+        "mean_ms": 938.91,
+        "stdev_ms": 289.47
+      },
+      "status_codes": {
+        "200": 60
+      },
+      "rag": {
+        "grounded": 51,
+        "not_grounded": 9,
+        "grounding_rate": 0.85,
+        "mean_citations": 4.82
+      },
+      "notes": []
+    }
+  ],
+  "resources": {
+    "concurrency-1": {
+      "insurance-ai-backend": {
+        "cpu_percent_mean": 9.53,
+        "cpu_percent_peak": 24.44,
+        "mem_mib_mean": 376.0,
+        "mem_mib_peak": 378.9,
+        "samples": 9
+      },
+      "insurance-ai-frontend": {
+        "cpu_percent_mean": 0.0,
+        "cpu_percent_peak": 0.0,
+        "mem_mib_mean": 10.0,
+        "mem_mib_peak": 10.2,
+        "samples": 9
+      },
+      "insurance-ai-gateway": {
+        "cpu_percent_mean": 6.08,
+        "cpu_percent_peak": 9.73,
+        "mem_mib_mean": 214.2,
+        "mem_mib_peak": 215.5,
+        "samples": 9
+      },
+      "insurance-ai-jaeger": {
+        "cpu_percent_mean": 0.07,
+        "cpu_percent_peak": 0.25,
+        "mem_mib_mean": 12.9,
+        "mem_mib_peak": 14.6,
+        "samples": 9
+      },
+      "insurance-ai-kafka": {
+        "cpu_percent_mean": 34.7,
+        "cpu_percent_peak": 220.89,
+        "mem_mib_mean": 432.0,
+        "mem_mib_peak": 501.4,
+        "samples": 9
+      },
+      "insurance-ai-kafka-ui": {
+        "cpu_percent_mean": 0.2,
+        "cpu_percent_peak": 1.2,
+        "mem_mib_mean": 284.4,
+        "mem_mib_peak": 285.6,
+        "samples": 9
+      },
+      "insurance-ai-keycloak": {
+        "cpu_percent_mean": 0.16,
+        "cpu_percent_peak": 0.19,
+        "mem_mib_mean": 572.3,
+        "mem_mib_peak": 572.5,
+        "samples": 9
+      },
+      "insurance-ai-otel-collector": {
+        "cpu_percent_mean": 0.28,
+        "cpu_percent_peak": 0.55,
+        "mem_mib_mean": 34.4,
+        "mem_mib_peak": 37.0,
+        "samples": 9
+      },
+      "insurance-ai-postgres": {
+        "cpu_percent_mean": 4.1,
+        "cpu_percent_peak": 10.99,
+        "mem_mib_mean": 55.9,
+        "mem_mib_peak": 56.4,
+        "samples": 9
+      },
+      "insurance-ai-waf": {
+        "cpu_percent_mean": 1.2,
+        "cpu_percent_peak": 4.12,
+        "mem_mib_mean": 42.1,
+        "mem_mib_peak": 45.9,
+        "samples": 9
+      }
+    },
+    "concurrency-5": {
+      "insurance-ai-backend": {
+        "cpu_percent_mean": 16.45,
+        "cpu_percent_peak": 27.01,
+        "mem_mib_mean": 384.0,
+        "mem_mib_peak": 388.8,
+        "samples": 4
+      },
+      "insurance-ai-frontend": {
+        "cpu_percent_mean": 0.61,
+        "cpu_percent_peak": 2.43,
+        "mem_mib_mean": 10.2,
+        "mem_mib_peak": 10.8,
+        "samples": 4
+      },
+      "insurance-ai-gateway": {
+        "cpu_percent_mean": 7.54,
+        "cpu_percent_peak": 13.14,
+        "mem_mib_mean": 216.8,
+        "mem_mib_peak": 217.2,
+        "samples": 4
+      },
+      "insurance-ai-jaeger": {
+        "cpu_percent_mean": 0.6,
+        "cpu_percent_peak": 2.37,
+        "mem_mib_mean": 15.3,
+        "mem_mib_peak": 16.1,
+        "samples": 4
+      },
+      "insurance-ai-kafka": {
+        "cpu_percent_mean": 1.34,
+        "cpu_percent_peak": 1.49,
+        "mem_mib_mean": 435.2,
+        "mem_mib_peak": 436.4,
+        "samples": 4
+      },
+      "insurance-ai-kafka-ui": {
+        "cpu_percent_mean": 0.08,
+        "cpu_percent_peak": 0.08,
+        "mem_mib_mean": 284.4,
+        "mem_mib_peak": 284.4,
+        "samples": 4
+      },
+      "insurance-ai-keycloak": {
+        "cpu_percent_mean": 0.96,
+        "cpu_percent_peak": 3.16,
+        "mem_mib_mean": 640.2,
+        "mem_mib_peak": 641.1,
+        "samples": 4
+      },
+      "insurance-ai-otel-collector": {
+        "cpu_percent_mean": 0.18,
+        "cpu_percent_peak": 0.3,
+        "mem_mib_mean": 36.9,
+        "mem_mib_peak": 37.0,
+        "samples": 4
+      },
+      "insurance-ai-postgres": {
+        "cpu_percent_mean": 6.46,
+        "cpu_percent_peak": 15.24,
+        "mem_mib_mean": 59.6,
+        "mem_mib_peak": 60.4,
+        "samples": 4
+      },
+      "insurance-ai-waf": {
+        "cpu_percent_mean": 2.25,
+        "cpu_percent_peak": 3.66,
+        "mem_mib_mean": 56.3,
+        "mem_mib_peak": 58.1,
+        "samples": 4
+      }
+    },
+    "concurrency-10": {
+      "insurance-ai-backend": {
+        "cpu_percent_mean": 14.59,
+        "cpu_percent_peak": 15.16,
+        "mem_mib_mean": 389.9,
+        "mem_mib_peak": 389.9,
+        "samples": 2
+      },
+      "insurance-ai-frontend": {
+        "cpu_percent_mean": 0.0,
+        "cpu_percent_peak": 0.0,
+        "mem_mib_mean": 10.0,
+        "mem_mib_peak": 10.0,
+        "samples": 2
+      },
+      "insurance-ai-gateway": {
+        "cpu_percent_mean": 21.36,
+        "cpu_percent_peak": 27.52,
+        "mem_mib_mean": 219.2,
+        "mem_mib_peak": 219.8,
+        "samples": 2
+      },
+      "insurance-ai-jaeger": {
+        "cpu_percent_mean": 0.03,
+        "cpu_percent_peak": 0.05,
+        "mem_mib_mean": 17.1,
+        "mem_mib_peak": 17.4,
+        "samples": 2
+      },
+      "insurance-ai-kafka": {
+        "cpu_percent_mean": 38.36,
+        "cpu_percent_peak": 75.29,
+        "mem_mib_mean": 446.6,
+        "mem_mib_peak": 447.2,
+        "samples": 2
+      },
+      "insurance-ai-kafka-ui": {
+        "cpu_percent_mean": 0.08,
+        "cpu_percent_peak": 0.08,
+        "mem_mib_mean": 284.6,
+        "mem_mib_peak": 284.6,
+        "samples": 2
+      },
+      "insurance-ai-keycloak": {
+        "cpu_percent_mean": 0.2,
+        "cpu_percent_peak": 0.2,
+        "mem_mib_mean": 640.2,
+        "mem_mib_peak": 640.2,
+        "samples": 2
+      },
+      "insurance-ai-otel-collector": {
+        "cpu_percent_mean": 0.17,
+        "cpu_percent_peak": 0.17,
+        "mem_mib_mean": 37.8,
+        "mem_mib_peak": 38.3,
+        "samples": 2
+      },
+      "insurance-ai-postgres": {
+        "cpu_percent_mean": 7.81,
+        "cpu_percent_peak": 8.68,
+        "mem_mib_mean": 65.7,
+        "mem_mib_peak": 65.8,
+        "samples": 2
+      },
+      "insurance-ai-waf": {
+        "cpu_percent_mean": 3.83,
+        "cpu_percent_peak": 4.1,
+        "mem_mib_mean": 61.3,
+        "mem_mib_peak": 61.4,
+        "samples": 2
+      }
+    }
+  },
+  "warmup": {
+    "name": "warmup",
+    "concurrency": 1,
+    "requests": 10,
+    "successes": 10,
+    "errors": 0,
+    "error_rate": 0.0,
+    "duration_seconds": 2.91,
+    "throughput_rps": 3.43,
+    "latency": {
+      "count": 10,
+      "min_ms": 82.55,
+      "p50_ms": 114.87,
+      "p75_ms": 342.24,
+      "p90_ms": 474.82,
+      "p95_ms": 874.43,
+      "p99_ms": 874.43,
+      "max_ms": 874.43,
+      "mean_ms": 242.44,
+      "stdev_ms": 257.66
+    },
+    "status_codes": {
+      "200": 10
+    },
+    "rag": {
+      "grounded": 9,
+      "not_grounded": 1,
+      "grounding_rate": 0.9,
+      "mean_citations": 4.8
+    },
+    "notes": []
+  }
+}

@@ -1,0 +1,52 @@
+<mat-sidenav-container class="audit-page">
+  <mat-sidenav-content>
+    <div class="audit-page__main">
+      <header class="audit-page__header">
+        <h1>AI Audit</h1>
+        <p>Immutable execution log - every AI system request, whether grounded, blocked or failed.</p>
+      </header>
+
+      @if (!loading() && records().length === 0) {
+        <app-empty-state icon="fact_check" title="No audit records yet" />
+      } @else {
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th scope="col">Timestamp</th>
+              <th scope="col">Trace ID</th>
+              <th scope="col">Provider</th>
+              <th scope="col">Outcome</th>
+              <th scope="col">Latency</th>
+              <th scope="col">Security</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (record of records(); track trackById($index, record)) {
+              <tr (click)="select(record)" tabindex="0" (keydown.enter)="select(record)">
+                <td>{{ record.timestamp }}</td>
+                <td><code>{{ record.traceId.slice(0, 8) }}…</code></td>
+                <td>{{ record.provider }}</td>
+                <td><app-status-badge [label]="record.outcome" [variant]="auditOutcomeVariant(record.outcome)" /></td>
+                <td>{{ record.latencyMs }} ms</td>
+                <td>
+                  @if (record.promptInjectionDetected) {
+                    <mat-icon fontSet="material-symbols-rounded" matTooltip="Prompt injection detected">gpp_bad</mat-icon>
+                  }
+                  @if (record.piiDetectedInQuestion || record.piiDetectedInAnswer) {
+                    <mat-icon fontSet="material-symbols-rounded" matTooltip="PII detected">privacy_tip</mat-icon>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  </mat-sidenav-content>
+
+  <mat-sidenav mode="over" position="end" [opened]="selected() !== null" (closedStart)="selected.set(null)">
+    @if (selected(); as record) {
+      <app-audit-detail-panel [record]="record" (closed)="selected.set(null)" />
+    }
+  </mat-sidenav>
+</mat-sidenav-container>

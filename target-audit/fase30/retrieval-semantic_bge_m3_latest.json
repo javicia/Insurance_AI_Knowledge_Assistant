@@ -1,0 +1,16 @@
+{
+  "variant": "semantic",
+  "model": "bge-m3:latest",
+  "ranked_cases": 153,
+  "recall_at_1": 0.3072,
+  "recall_at_3": 0.6928,
+  "recall_at_5": 0.8235,
+  "recall_at_8": 0.8627,
+  "mrr": 0.5133,
+  "latency_ms": {
+    "p50": 2522.8,
+    "p95": 2617.4,
+    "p99": 2658.9,
+    "mean": 2528.4
+  }
+}

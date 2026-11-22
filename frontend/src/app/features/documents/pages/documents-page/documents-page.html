@@ -1,0 +1,54 @@
+<div class="documents-page">
+  <header class="documents-page__header">
+    <h1>Documents</h1>
+    <p>Upload insurance documentation and track its ingestion status.</p>
+  </header>
+
+  <section class="documents-page__section">
+    <h2>Upload a document</h2>
+    <app-document-upload [uploading]="tracker.uploading()" (uploadRequested)="onUploadRequested($event)" />
+  </section>
+
+  <section class="documents-page__section">
+    <h2>This session's uploads</h2>
+    <p class="documents-page__note">
+      This PoC does not expose an endpoint to list all previously ingested documents - only
+      documents uploaded during this browser session are shown here, with their live ingestion
+      status.
+    </p>
+
+    @if (tracker.uploads().length === 0) {
+      <app-empty-state
+        icon="folder_open"
+        title="No documents uploaded yet"
+        description="Upload a PDF above to see its ingestion status here."
+      />
+    } @else {
+      <table class="documents-page__table">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Type</th>
+            <th scope="col">Version</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (document of tracker.uploads(); track trackById($index, document)) {
+            <tr>
+              <td>{{ document.name }}</td>
+              <td>{{ document.type }}</td>
+              <td>{{ latestVersionNumber(document) }}</td>
+              <td>
+                <app-status-badge
+                  [label]="latestStatus(document)"
+                  [variant]="documentStatusVariant(latestStatus(document))"
+                />
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+</div>

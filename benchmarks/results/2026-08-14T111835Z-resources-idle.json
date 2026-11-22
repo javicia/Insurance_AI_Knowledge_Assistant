@@ -1,0 +1,85 @@
+{
+  "benchmark": "resources_idle",
+  "environment": {
+    "captured_at": "2026-08-14T11:18:34.918566+00:00",
+    "git_commit": "d6dd49e",
+    "host_os": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.4",
+    "environment_name": "local-docker-desktop",
+    "environment_notes": "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host.",
+    "llm_provider": "fake",
+    "semantic_similarity_threshold": "0.45"
+  },
+  "summary": {
+    "insurance-ai-backend": {
+      "cpu_percent_mean": 1.68,
+      "cpu_percent_peak": 5.1,
+      "mem_mib_mean": 368.2,
+      "mem_mib_peak": 369.4,
+      "samples": 8
+    },
+    "insurance-ai-frontend": {
+      "cpu_percent_mean": 0.34,
+      "cpu_percent_peak": 2.73,
+      "mem_mib_mean": 10.0,
+      "mem_mib_peak": 10.2,
+      "samples": 8
+    },
+    "insurance-ai-gateway": {
+      "cpu_percent_mean": 1.41,
+      "cpu_percent_peak": 5.64,
+      "mem_mib_mean": 209.7,
+      "mem_mib_peak": 210.5,
+      "samples": 8
+    },
+    "insurance-ai-jaeger": {
+      "cpu_percent_mean": 0.22,
+      "cpu_percent_peak": 1.56,
+      "mem_mib_mean": 10.7,
+      "mem_mib_peak": 10.9,
+      "samples": 8
+    },
+    "insurance-ai-kafka": {
+      "cpu_percent_mean": 1.92,
+      "cpu_percent_peak": 3.28,
+      "mem_mib_mean": 417.6,
+      "mem_mib_peak": 419.2,
+      "samples": 8
+    },
+    "insurance-ai-kafka-ui": {
+      "cpu_percent_mean": 0.08,
+      "cpu_percent_peak": 0.13,
+      "mem_mib_mean": 283.7,
+      "mem_mib_peak": 284.1,
+      "samples": 8
+    },
+    "insurance-ai-keycloak": {
+      "cpu_percent_mean": 0.97,
+      "cpu_percent_peak": 3.59,
+      "mem_mib_mean": 563.9,
+      "mem_mib_peak": 565.0,
+      "samples": 8
+    },
+    "insurance-ai-otel-collector": {
+      "cpu_percent_mean": 0.18,
+      "cpu_percent_peak": 0.26,
+      "mem_mib_mean": 30.3,
+      "mem_mib_peak": 30.5,
+      "samples": 8
+    },
+    "insurance-ai-postgres": {
+      "cpu_percent_mean": 1.35,
+      "cpu_percent_peak": 5.43,
+      "mem_mib_mean": 54.7,
+      "mem_mib_peak": 54.9,
+      "samples": 8
+    },
+    "insurance-ai-waf": {
+      "cpu_percent_mean": 0.0,
+      "cpu_percent_peak": 0.0,
+      "mem_mib_mean": 35.3,
+      "mem_mib_peak": 35.3,
+      "samples": 8
+    }
+  }
+}

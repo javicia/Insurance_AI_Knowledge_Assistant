@@ -1,0 +1,56 @@
+{
+  "benchmark": "ingestion",
+  "environment": {
+    "captured_at": "2026-08-14T11:31:41.087022+00:00",
+    "git_commit": "d6dd49e",
+    "host_os": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.4",
+    "environment_name": "local-docker-desktop",
+    "environment_notes": "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host.",
+    "llm_provider": "fake",
+    "semantic_similarity_threshold": "0.45"
+  },
+  "documents": [
+    {
+      "document": "poliza-general-auto.pdf",
+      "size_kib": 11.6,
+      "upload_ms": 2007.8,
+      "total_to_embedded_ms": 98268.6,
+      "final_status": "EMBEDDED"
+    },
+    {
+      "document": "condiciones-generales-auto-v1.pdf",
+      "size_kib": 10.3,
+      "upload_ms": 1558.6,
+      "total_to_embedded_ms": 33620.5,
+      "final_status": "EMBEDDED"
+    },
+    {
+      "document": "condiciones-generales-auto-v2.pdf",
+      "size_kib": 11.6,
+      "upload_ms": 780.2,
+      "total_to_embedded_ms": 32845.0,
+      "final_status": "EMBEDDED"
+    },
+    {
+      "document": "terceros-ampliado-lunas.pdf",
+      "size_kib": 10.5,
+      "upload_ms": 329.9,
+      "total_to_embedded_ms": 16365.8,
+      "final_status": "EMBEDDED"
+    },
+    {
+      "document": "terceros-ampliado.pdf",
+      "size_kib": 10.7,
+      "upload_ms": 1331.5,
+      "total_to_embedded_ms": 25417.6,
+      "final_status": "EMBEDDED"
+    }
+  ],
+  "summary": {
+    "documents_measured": 5,
+    "mean_upload_ms": 1201.6,
+    "mean_total_to_embedded_ms": 41303.5,
+    "documents_per_minute_observed": 1.45
+  }
+}

@@ -1,0 +1,41 @@
+.chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3);
+  background: var(--app-color-surface);
+  border: 1px solid var(--app-color-border);
+  border-radius: var(--app-radius-lg);
+  box-shadow: var(--app-shadow-md);
+
+  &__input {
+    flex: 1 1 auto;
+    resize: none;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--app-color-text-primary);
+    padding: var(--app-space-2) var(--app-space-2);
+    min-height: 24px;
+    max-height: 160px;
+    field-sizing: content;
+
+    &::placeholder {
+      color: var(--app-color-text-muted);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+    }
+  }
+
+  &__send {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--app-space-1);
+  }
+}

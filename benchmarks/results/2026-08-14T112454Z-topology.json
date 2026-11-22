@@ -1,0 +1,130 @@
+{
+  "benchmark": "topology",
+  "environment": {
+    "captured_at": "2026-08-14T11:24:00.440298+00:00",
+    "git_commit": "d6dd49e",
+    "host_os": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.4",
+    "environment_name": "local-docker-desktop",
+    "environment_notes": "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host.",
+    "llm_provider": "fake",
+    "semantic_similarity_threshold": "0.45"
+  },
+  "requests_per_topology": 30,
+  "phases": [
+    {
+      "name": "topology-waf",
+      "concurrency": 1,
+      "requests": 30,
+      "successes": 30,
+      "errors": 0,
+      "error_rate": 0.0,
+      "duration_seconds": 11.27,
+      "throughput_rps": 2.66,
+      "latency": {
+        "count": 30,
+        "min_ms": 62.13,
+        "p50_ms": 296.06,
+        "p75_ms": 418.57,
+        "p90_ms": 500.04,
+        "p95_ms": 611.08,
+        "p99_ms": 1772.39,
+        "max_ms": 1772.39,
+        "mean_ms": 375.43,
+        "stdev_ms": 320.42
+      },
+      "status_codes": {
+        "200": 30
+      },
+      "rag": {
+        "grounded": 27,
+        "not_grounded": 3,
+        "grounding_rate": 0.9,
+        "mean_citations": 5.63
+      },
+      "notes": [],
+      "description": "Browser -> WAF -> Gateway -> Backend (full security chain)"
+    },
+    {
+      "name": "topology-gateway",
+      "concurrency": 1,
+      "requests": 30,
+      "successes": 30,
+      "errors": 0,
+      "error_rate": 0.0,
+      "duration_seconds": 14.66,
+      "throughput_rps": 2.05,
+      "latency": {
+        "count": 30,
+        "min_ms": 98.19,
+        "p50_ms": 381.21,
+        "p75_ms": 568.89,
+        "p90_ms": 909.1,
+        "p95_ms": 1047.58,
+        "p99_ms": 1279.6,
+        "max_ms": 1279.6,
+        "mean_ms": 488.58,
+        "stdev_ms": 308.23
+      },
+      "status_codes": {
+        "200": 30
+      },
+      "rag": {
+        "grounded": 27,
+        "not_grounded": 3,
+        "grounding_rate": 0.9,
+        "mean_citations": 5.63
+      },
+      "notes": [],
+      "description": "Gateway -> Backend (no WAF)"
+    },
+    {
+      "name": "topology-backend",
+      "concurrency": 1,
+      "requests": 30,
+      "successes": 30,
+      "errors": 0,
+      "error_rate": 0.0,
+      "duration_seconds": 14.13,
+      "throughput_rps": 2.12,
+      "latency": {
+        "count": 30,
+        "min_ms": 226.92,
+        "p50_ms": 362.06,
+        "p75_ms": 414.38,
+        "p90_ms": 780.99,
+        "p95_ms": 953.64,
+        "p99_ms": 1573.71,
+        "max_ms": 1573.71,
+        "mean_ms": 470.9,
+        "stdev_ms": 316.77
+      },
+      "status_codes": {
+        "200": 30
+      },
+      "rag": {
+        "grounded": 27,
+        "not_grounded": 3,
+        "grounding_rate": 0.9,
+        "mean_citations": 5.63
+      },
+      "notes": [],
+      "description": "Backend directly, bypassing both the gateway and the WAF"
+    }
+  ],
+  "notes": [],
+  "overhead_ms": {
+    "waf_layer": {
+      "p50": -85.15,
+      "p95": -436.5
+    },
+    "gateway_layer": {
+      "p50": 19.15,
+      "p95": 93.94
+    },
+    "waf_plus_gateway": {
+      "p50": -66.0,
+      "p95": -342.56
+    }
+  }
+}

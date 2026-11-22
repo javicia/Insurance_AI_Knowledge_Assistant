@@ -1,0 +1,7 @@
+id,category,difficulty,expected_grounding,actual_grounding,blocked,pii_detected,citations,expected_document,expected_document_rank,retrieved_documents,correct
+FT-001,cobertura,baja,GROUNDED,GROUNDED,False,False,8,terceros-basico,5,preguntas-frecuentes|preguntas-frecuentes|glosario-asegurador|tabla-exclusiones|terceros-basico|todo-riesgo-con-franquicia|terceros-basico|asistencia-en-carretera,True
+FT-002,cobertura,media,GROUNDED,GROUNDED,False,False,3,terceros-ampliado,,preguntas-frecuentes|asistencia-en-carretera|tabla-exclusiones,True
+FT-003,cobertura,baja,GROUNDED,GROUNDED,False,False,8,todo-riesgo-sin-franquicia;todo-riesgo-con-franquicia,,condiciones-generales-auto-v1|bench-condiciones-generales-auto-v1|glosario-asegurador|glosario-asegurador|todo-riesgo-sin-franquicia|terceros-basico|todo-riesgo-sin-franquicia|tabla-exclusiones,True
+FT-004,cobertura,media,GROUNDED,GROUNDED,False,False,5,todo-riesgo-con-franquicia;todo-riesgo-sin-franquicia,,fenomenos-meteorologicos|preguntas-frecuentes|todo-riesgo-con-franquicia|todo-riesgo-sin-franquicia|tabla-exclusiones,True
+FT-005,cobertura,baja,GROUNDED,GROUNDED,False,False,1,poliza-general-auto;condiciones-generales-auto-v2,,terceros-basico,True
+FT-006,cobertura,media,GROUNDED,GROUNDED,False,False,7,poliza-general-auto,2,bench-poliza-general-auto|poliza-general-auto|bench-poliza-general-auto|bench-poliza-general-auto|vehiculos-hibridos|conductores-jovenes|preguntas-frecuentes,True

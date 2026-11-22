@@ -1,0 +1,9 @@
+<div class="message-list" role="log" aria-live="polite" aria-label="Conversation">
+  @for (message of messages(); track trackById($index, message)) {
+    <app-message-bubble [message]="message" />
+  }
+  @if (sending()) {
+    <app-loading-indicator />
+  }
+  <div #scrollAnchor></div>
+</div>

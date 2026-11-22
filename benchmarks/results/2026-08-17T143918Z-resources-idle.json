@@ -1,0 +1,93 @@
+{
+  "benchmark": "resources_idle",
+  "environment": {
+    "captured_at": "2026-08-17T14:39:17.731001+00:00",
+    "git_commit": "fe57b45",
+    "host_os": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.4",
+    "environment_name": "local-docker-desktop",
+    "environment_notes": "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host.",
+    "llm_provider": "fake",
+    "semantic_similarity_threshold": "0.45",
+    "corpus": {
+      "curated_corpus_documents_on_disk": 26,
+      "curated_corpus_documents_in_db": 26,
+      "curated_corpus_chunks": 1650,
+      "search_space_documents": 44,
+      "search_space_chunks": 2037,
+      "search_space_embeddings": 2037
+    }
+  },
+  "summary": {
+    "insurance-ai-backend": {
+      "cpu_percent_mean": 0.95,
+      "cpu_percent_peak": 4.19,
+      "mem_mib_mean": 383.6,
+      "mem_mib_peak": 385.2,
+      "samples": 8
+    },
+    "insurance-ai-frontend": {
+      "cpu_percent_mean": 0.7,
+      "cpu_percent_peak": 2.81,
+      "mem_mib_mean": 11.2,
+      "mem_mib_peak": 12.4,
+      "samples": 8
+    },
+    "insurance-ai-gateway": {
+      "cpu_percent_mean": 0.35,
+      "cpu_percent_peak": 2.52,
+      "mem_mib_mean": 235.1,
+      "mem_mib_peak": 235.5,
+      "samples": 8
+    },
+    "insurance-ai-jaeger": {
+      "cpu_percent_mean": 0.03,
+      "cpu_percent_peak": 0.08,
+      "mem_mib_mean": 65.4,
+      "mem_mib_peak": 65.8,
+      "samples": 8
+    },
+    "insurance-ai-kafka": {
+      "cpu_percent_mean": 32.74,
+      "cpu_percent_peak": 220.36,
+      "mem_mib_mean": 980.9,
+      "mem_mib_peak": 1046.5,
+      "samples": 8
+    },
+    "insurance-ai-kafka-ui": {
+      "cpu_percent_mean": 0.18,
+      "cpu_percent_peak": 0.92,
+      "mem_mib_mean": 315.8,
+      "mem_mib_peak": 315.8,
+      "samples": 8
+    },
+    "insurance-ai-keycloak": {
+      "cpu_percent_mean": 0.16,
+      "cpu_percent_peak": 0.18,
+      "mem_mib_mean": 674.6,
+      "mem_mib_peak": 675.0,
+      "samples": 8
+    },
+    "insurance-ai-otel-collector": {
+      "cpu_percent_mean": 0.2,
+      "cpu_percent_peak": 0.35,
+      "mem_mib_mean": 35.7,
+      "mem_mib_peak": 35.9,
+      "samples": 8
+    },
+    "insurance-ai-postgres": {
+      "cpu_percent_mean": 1.09,
+      "cpu_percent_peak": 5.81,
+      "mem_mib_mean": 74.3,
+      "mem_mib_peak": 74.7,
+      "samples": 8
+    },
+    "insurance-ai-waf": {
+      "cpu_percent_mean": 0.36,
+      "cpu_percent_peak": 2.87,
+      "mem_mib_mean": 61.8,
+      "mem_mib_peak": 62.0,
+      "samples": 8
+    }
+  }
+}
