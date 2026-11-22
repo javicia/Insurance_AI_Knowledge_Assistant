@@ -35,7 +35,7 @@ class ScoreFusionTest {
 
     private LexicalSearchResult lexicalResult(String chunkIdSuffix, double score) {
         return new LexicalSearchResult(chunkId(chunkIdSuffix), documentId, documentVersionId,
-                "content " + chunkIdSuffix, ChunkMetadata.empty(), score);
+                "content " + chunkIdSuffix, ChunkMetadata.empty(), score, 4, 3);
     }
 
     @Test

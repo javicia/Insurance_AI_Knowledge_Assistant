@@ -69,7 +69,8 @@ class AskInsuranceKnowledgeUseCaseMetricsTest {
 
     private final AskInsuranceKnowledgeUseCase useCase = new AskInsuranceKnowledgeUseCase(hybridRetrievalService,
             llmProvider, documentRepository, properties(), inputGuardService, promptRepository, auditService,
-            meterRegistry, securityEventLogger);
+            meterRegistry, securityEventLogger,
+            new GeneralAiFallbackPolicy(properties()), new GeneralAiBudgetLedger(properties(), com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference(), java.time.Clock.systemDefaultZone()), new com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator(com.rag.springai.insuranceai.application.benchmark.LlmPricing.reference()));
 
     @BeforeEach
     void stubGuardsAsClean() {
@@ -85,9 +86,10 @@ class AskInsuranceKnowledgeUseCaseMetricsTest {
 
     private static InsuranceAiProperties properties() {
         InsuranceAiProperties.Rag rag = new InsuranceAiProperties.Rag(
-                new InsuranceAiProperties.Rag.Semantic(8, 0.75), new InsuranceAiProperties.Rag.Lexical(8, 0.0),
+                new InsuranceAiProperties.Rag.Semantic(8, 0.75), new InsuranceAiProperties.Rag.Lexical(8, 0.0, 0.0),
                 new InsuranceAiProperties.Rag.Hybrid(20, 8, 60.0), new InsuranceAiProperties.Rag.Reranking(true),
-                new InsuranceAiProperties.Rag.QueryExpansion(false, 3), new InsuranceAiProperties.Rag.Context(6000));
+                new InsuranceAiProperties.Rag.QueryExpansion(false, 3), new InsuranceAiProperties.Rag.Context(6000),
+                new InsuranceAiProperties.Rag.GeneralAiFallback(false, false, new java.math.BigDecimal("100"), new java.math.BigDecimal("1000"), 2000));
         return new InsuranceAiProperties(rag,
                 new InsuranceAiProperties.Security(new InsuranceAiProperties.Security.PromptInjection(true),
                         new InsuranceAiProperties.Security.Pii(true),
@@ -112,7 +114,7 @@ class AskInsuranceKnowledgeUseCaseMetricsTest {
         DocumentChunk chunk = DocumentChunk.create(document.id(), version.id(), new ChunkIndex(0),
                 new ChunkContent("Water damage is covered."), new ChunkMetadata(37, null, "7.2", 1));
         HybridRetrievalResult candidate = new HybridRetrievalResult(chunk.id(), chunk.documentId(),
-                chunk.documentVersionId(), chunk.content().value(), chunk.metadata(), 0.9, 1, null, null, 0.5, null);
+                chunk.documentVersionId(), chunk.content().value(), chunk.metadata(), 0.9, 1, null, null, null, 0.5, null);
         return new HybridRetrievalOutcome(List.of(candidate),
                 new RetrievalDiagnostics(RetrievalOutcome.HYBRID, 1, 0, 1, 1, 1));
     }

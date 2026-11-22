@@ -19,7 +19,7 @@ function groundedAnswer(overrides: Partial<RagAnswer> = {}): RagAnswer {
     grounding: { status: 'GROUNDED' },
     traceId: 'trace-1',
     piiDetected: false,
-    blocked: false,
+    answerMode: 'DOCUMENT_GROUNDED',
     ...overrides,
   };
 }
@@ -69,7 +69,7 @@ describe('ChatSessionService', () => {
         answer: 'This question could not be processed…',
         sources: [],
         grounding: { status: 'NOT_GROUNDED' },
-        blocked: true,
+        answerMode: 'BLOCKED',
       }),
     );
 
@@ -80,7 +80,30 @@ describe('ChatSessionService', () => {
     }
   });
 
-  it('maps a NOT_GROUNDED, non-blocked RagAnswer to the no-answer message kind', () => {
+  it('maps a GENERAL_AI_UNVERIFIED RagAnswer to its own kind, never to grounded', () => {
+    // Both this and a grounded answer carry content the user will read, and both arrive as
+    // HTTP 200. If they collapsed to the same kind, the UI would present a language model's
+    // general knowledge as if the documentation said it.
+    service.send('¿Qué es una franquicia?');
+
+    httpMock.expectOne('/api/chat').flush(
+      groundedAnswer({
+        answer: 'Una franquicia es la parte del siniestro que asume el asegurado.',
+        sources: [],
+        grounding: { status: 'NOT_GROUNDED' },
+        answerMode: 'GENERAL_AI_UNVERIFIED',
+      }),
+    );
+
+    const assistantMessage = service.messages()[1];
+    expect(assistantMessage.role).toBe('assistant');
+    if (assistantMessage.role === 'assistant') {
+      expect(assistantMessage.kind).toBe('general-ai');
+      expect(assistantMessage.sources.length).toBe(0);
+    }
+  });
+
+  it('maps a NO_ANSWER RagAnswer to the no-answer message kind', () => {
     service.send('What is the CEO salary?');
 
     httpMock.expectOne('/api/chat').flush(
@@ -88,7 +111,7 @@ describe('ChatSessionService', () => {
         answer: 'I do not have sufficient information…',
         sources: [],
         grounding: { status: 'NOT_GROUNDED' },
-        blocked: false,
+        answerMode: 'NO_ANSWER',
       }),
     );
 

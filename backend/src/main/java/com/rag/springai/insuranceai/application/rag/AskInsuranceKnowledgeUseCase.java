@@ -1,6 +1,8 @@
 package com.rag.springai.insuranceai.application.rag;
 
 import com.rag.springai.insuranceai.application.audit.AuditService;
+import com.rag.springai.insuranceai.application.benchmark.LlmCost;
+import com.rag.springai.insuranceai.application.benchmark.LlmCostCalculator;
 import com.rag.springai.insuranceai.application.configuration.InsuranceAiProperties;
 import com.rag.springai.insuranceai.application.document.exception.DocumentNotFoundException;
 import com.rag.springai.insuranceai.application.document.exception.DocumentVersionNotFoundException;
@@ -15,11 +17,13 @@ import com.rag.springai.insuranceai.domain.prompt.Prompt;
 import com.rag.springai.insuranceai.domain.rag.HybridRetrievalResult;
 import com.rag.springai.insuranceai.domain.rag.LlmCompletion;
 import com.rag.springai.insuranceai.domain.rag.LlmPrompt;
+import com.rag.springai.insuranceai.domain.rag.RetrievalDiagnostics;
 import com.rag.springai.insuranceai.domain.rag.RetrievalOutcome;
 import com.rag.springai.insuranceai.domain.security.PromptInjectionAssessment;
 import com.rag.springai.insuranceai.domain.security.SecurityEvent;
 import com.rag.springai.insuranceai.domain.security.SecurityEventOutcome;
 import com.rag.springai.insuranceai.domain.security.SecurityEventType;
+import com.rag.springai.insuranceai.domain.shared.exception.TransientProcessingException;
 import com.rag.springai.insuranceai.ports.outbound.DocumentRepository;
 import com.rag.springai.insuranceai.ports.outbound.LlmProvider;
 import com.rag.springai.insuranceai.ports.outbound.PromptRepository;
@@ -36,6 +40,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -45,21 +51,15 @@ import java.util.concurrent.TimeUnit;
  * ask the LLM, grounded strictly in that retrieved text (brief section 11: no relevant context
  * means no LLM call at all).
  *
- * <p><b>No-answer policy (FASE 6, brief section 21; FASE 14 audit remediation):</b> answer only
- * if at least one final candidate has {@code semanticScore >= insurance-ai.rag.semantic
- * .similarity-threshold} (FASE 5's original criterion, unchanged) <em>or</em> a non-null {@code
- * lexicalScore} that also clears {@code insurance-ai.rag.lexical.min-rank}. The lexical branch
- * originally treated any non-null {@code lexicalScore} as sufficient, on the reasoning that
- * PostgreSQL's {@code @@} text-search operator "only ever returns genuine matches" - true, but
- * "matched at all" and "matched well" are different things: {@code @@} is satisfied by a single
- * weak keyword overlap just as readily as a strong multi-term match, and {@code ts_rank_cd} was
- * being computed but never actually checked. {@code min-rank} closes that gap (default {@code
- * 0.0}, i.e. no behaviour change until a deployment tunes it against its own corpus - see {@code
- * InsuranceAiProperties.Rag.Lexical}'s Javadoc and {@code docs/adr/ADR-012-AUDIT-REMEDIATION.md}).
- * This deliberately never derives a probability from {@code fusionScore} or {@code rerankerScore}
- * (brief section 21/23: rank fusion and reranking are relevance signals, not grounding proof) -
- * it inspects each candidate's original semantic/lexical evidence, which reranking never
- * overwrites (see {@link HybridRetrievalResult#withRerankerScore}).
+ * <p><b>No-answer policy (FASE 6, brief section 21; FASE 14 audit remediation; FASE 28):</b>
+ * answer only if at least one final candidate carries sufficient evidence - see {@link
+ * #isSufficientEvidence}. This deliberately never derives a probability from {@code fusionScore}
+ * or {@code rerankerScore} (brief section 21/23: rank fusion and reranking are relevance signals,
+ * not grounding proof) - it inspects each candidate's original semantic/lexical evidence, which
+ * reranking never overwrites (see {@link HybridRetrievalResult#withRerankerScore}). FASE 28
+ * extended the same principle to the lexical branch itself: {@code ts_rank_cd} is a relevance
+ * signal too, so it is no longer sufficient on its own either, and the branch must additionally
+ * cover {@code insurance-ai.rag.lexical.min-term-coverage} of the question's lexemes.
  *
  * <p><b>Guardrails (FASE 8, brief section 15):</b> {@link InputGuardService} scans the question
  * first - a detected prompt injection attempt blocks the request immediately ({@link
@@ -118,11 +118,16 @@ public final class AskInsuranceKnowledgeUseCase {
     private final AuditService auditService;
     private final MeterRegistry meterRegistry;
     private final SecurityEventPort securityEventLogger;
+    private final GeneralAiFallbackPolicy generalAiFallbackPolicy;
+    private final GeneralAiBudgetLedger budgetLedger;
+    private final LlmCostCalculator llmCostCalculator;
 
     public AskInsuranceKnowledgeUseCase(HybridRetrievalService hybridRetrievalService, LlmProvider llmProvider,
             DocumentRepository documentRepository, InsuranceAiProperties properties,
             InputGuardService inputGuardService, PromptRepository promptRepository, AuditService auditService,
-            MeterRegistry meterRegistry, SecurityEventPort securityEventLogger) {
+            MeterRegistry meterRegistry, SecurityEventPort securityEventLogger,
+            GeneralAiFallbackPolicy generalAiFallbackPolicy, GeneralAiBudgetLedger budgetLedger,
+            LlmCostCalculator llmCostCalculator) {
         this.hybridRetrievalService = Objects.requireNonNull(hybridRetrievalService,
                 "hybridRetrievalService must not be null");
         this.llmProvider = Objects.requireNonNull(llmProvider, "llmProvider must not be null");
@@ -133,6 +138,10 @@ public final class AskInsuranceKnowledgeUseCase {
         this.auditService = Objects.requireNonNull(auditService, "auditService must not be null");
         this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry must not be null");
         this.securityEventLogger = Objects.requireNonNull(securityEventLogger, "securityEventLogger must not be null");
+        this.generalAiFallbackPolicy = Objects.requireNonNull(generalAiFallbackPolicy,
+                "generalAiFallbackPolicy must not be null");
+        this.budgetLedger = Objects.requireNonNull(budgetLedger, "budgetLedger must not be null");
+        this.llmCostCalculator = Objects.requireNonNull(llmCostCalculator, "llmCostCalculator must not be null");
     }
 
     public RagAnswer ask(AskInsuranceKnowledgeCommand command) {
@@ -173,11 +182,7 @@ public final class AskInsuranceKnowledgeUseCase {
         List<HybridRetrievalResult> finalCandidates = outcome.finalCandidates();
 
         if (!hasQualifyingCandidate(finalCandidates)) {
-            recordAudit(traceId, provider, null, null, outcome.diagnostics().outcome(),
-                    outcome.diagnostics().semanticCandidateCount(), outcome.diagnostics().lexicalCandidateCount(),
-                    outcome.diagnostics().finalCandidateCount(), GroundingStatus.NOT_GROUNDED.name(), false,
-                    inputAssessment.pii().detected(), false, startNanos, AuditOutcome.NO_ANSWER, null);
-            return RagAnswer.noAnswer(traceId);
+            return answerWithoutDocumentaryEvidence(command, outcome, inputAssessment, traceId, provider, startNanos);
         }
 
         warnIfRetrievedContentContainsInjectionAttempts(finalCandidates);
@@ -231,8 +236,133 @@ public final class AskInsuranceKnowledgeUseCase {
                 GroundingStatus.GROUNDED.name(), false, inputAssessment.pii().detected(), piiInAnswer, startNanos,
                 AuditOutcome.GROUNDED_ANSWER, null);
 
-        return new RagAnswer(completion.text(), sources, new Grounding(GroundingStatus.GROUNDED), traceId,
-                piiInAnswer, false);
+        return new RagAnswer(completion.text(), sources, new Grounding(GroundingStatus.GROUNDED),
+                AnswerMode.DOCUMENT_GROUNDED, traceId, piiInAnswer);
+    }
+
+    /**
+     * The exit taken when retrieval produced no sufficient evidence (FASE 28): either the
+     * explicit no-answer that has always been the brief's section 11 behaviour, or - if {@link
+     * GeneralAiFallbackPolicy} permits it - an answer from the model's own general knowledge,
+     * labelled {@link AnswerMode#GENERAL_AI_UNVERIFIED} and carrying no citations.
+     *
+     * <p>Reached only from the no-evidence branch, which is what structurally guarantees two
+     * properties the fallback would be dangerous without: a blocked question can never arrive
+     * here ({@link #ask} returns on the guardrail path before retrieval even runs), and a
+     * question that <em>did</em> find evidence is never diverted to general knowledge. Neither
+     * depends on a rule that could be edited out of the policy.
+     *
+     * <p>A provider failure on this path does not propagate as a 502/503. The grounded path has
+     * no fallback for an LLM outage, so failing loudly is the only honest option there; here the
+     * caller asked a question the documentation could not answer, and the correct degraded
+     * result is the no-answer they would have received had the fallback been disabled - not an
+     * error implying their question was answerable.
+     */
+    private RagAnswer answerWithoutDocumentaryEvidence(AskInsuranceKnowledgeCommand command,
+            HybridRetrievalOutcome outcome, InputGuardAssessment inputAssessment, String traceId, String provider,
+            long startNanos) {
+        RetrievalDiagnostics diagnostics = outcome.diagnostics();
+        boolean piiInQuestion = inputAssessment.pii().detected();
+
+        Optional<GeneralAiFallbackRefusal> refusal = generalAiFallbackPolicy.evaluate(command.question(),
+                piiInQuestion);
+        if (refusal.isPresent()) {
+            meterRegistry.counter("rag.general_ai.refused.count", "reason", refusal.get().name()).increment();
+            log.info("General-AI fallback not used (reason={}) - returning an explicit no-answer", refusal.get());
+            recordAudit(traceId, provider, null, null, diagnostics.outcome(), diagnostics.semanticCandidateCount(),
+                    diagnostics.lexicalCandidateCount(), diagnostics.finalCandidateCount(),
+                    GroundingStatus.NOT_GROUNDED.name(), false, piiInQuestion, false, startNanos,
+                    AuditOutcome.NO_ANSWER, null);
+            return RagAnswer.noAnswer(traceId);
+        }
+
+        // Budget is reserved BEFORE the provider is called (FASE 29, DEF-08): counting spend
+        // afterwards cannot enforce a limit, because the money is gone by the time it is counted
+        // and two concurrent requests both see headroom that only one of them can have.
+        Optional<UUID> reservation = budgetLedger.reserve();
+        if (reservation.isEmpty()) {
+            meterRegistry.counter("rag.general_ai.refused.count", "reason",
+                    GeneralAiFallbackRefusal.BUDGET_EXHAUSTED.name()).increment();
+            log.warn("General-AI fallback refused: budget exhausted - returning an explicit no-answer");
+            recordAudit(traceId, provider, null, null, diagnostics.outcome(), diagnostics.semanticCandidateCount(),
+                    diagnostics.lexicalCandidateCount(), diagnostics.finalCandidateCount(),
+                    GroundingStatus.NOT_GROUNDED.name(), false, piiInQuestion, false, startNanos,
+                    AuditOutcome.NO_ANSWER, null);
+            return RagAnswer.noAnswer(traceId);
+        }
+        UUID reservationId = reservation.get();
+
+        Prompt activePrompt;
+        try {
+            activePrompt = promptRepository.findActiveByKey(WellKnownAiSystems.GENERAL_AI_SYSTEM_PROMPT_KEY)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "No ACTIVE prompt found for key '" + WellKnownAiSystems.GENERAL_AI_SYSTEM_PROMPT_KEY
+                                    + "' - the Prompt Registry must always have exactly one active prompt per key"));
+        }
+        catch (RuntimeException e) {
+            // Nothing was sent to the provider, so the reservation is definitely unspent.
+            budgetLedger.releaseAfterFailure(reservationId, false);
+            throw e;
+        }
+        // Deliberately an empty passage list: the retrieved candidates were judged insufficient,
+        // so passing them anyway would ground the answer in exactly the evidence this branch
+        // just rejected, while the response claims to have no sources.
+        LlmPrompt prompt = new LlmPrompt(activePrompt.content(), command.question(), List.of());
+
+        LlmCompletion completion;
+        Timer.Sample llmSample = Timer.start(meterRegistry);
+        try {
+            completion = llmProvider.complete(prompt);
+        }
+        catch (RuntimeException e) {
+            llmSample.stop(meterRegistry.timer("rag.llm.latency", "provider", provider, "outcome", "ERROR"));
+            meterRegistry.counter("rag.general_ai.failed.count", "error", e.getClass().getSimpleName()).increment();
+            // A definite rejection cannot have been billed, so the reservation is returned. A
+            // timeout is kept: the provider may have processed and billed it, and this side has
+            // no way to find out - see GeneralAiBudgetLedger#releaseAfterFailure.
+            budgetLedger.releaseAfterFailure(reservationId, isTimeout(e));
+            log.warn("General-AI fallback provider call failed - degrading to an explicit no-answer", e);
+            recordAudit(traceId, provider, activePrompt.promptKey(), activePrompt.version(), diagnostics.outcome(),
+                    diagnostics.semanticCandidateCount(), diagnostics.lexicalCandidateCount(),
+                    diagnostics.finalCandidateCount(), GroundingStatus.NOT_GROUNDED.name(), false, piiInQuestion,
+                    false, startNanos, AuditOutcome.NO_ANSWER, e.getClass().getSimpleName());
+            return RagAnswer.noAnswer(traceId);
+        }
+        llmSample.stop(meterRegistry.timer("rag.llm.latency", "provider", provider, "outcome", "SUCCESS"));
+        recordTokenUsage(provider, completion);
+        // Reconcile the worst-case reservation down to what was really consumed. An empty
+        // Optional means the provider reported no usage, and the ledger then KEEPS the worst
+        // case rather than refunding it - refunding would make an unmetered provider unlimited.
+        budgetLedger.reconcile(reservationId,
+                llmCostCalculator.observedCostOf(completion).map(LlmCost::totalCost));
+
+        boolean piiInAnswer = inputGuardService.scanForPii(completion.text()).detected();
+        if (piiInAnswer) {
+            log.warn("General-AI answer contains detected PII");
+            meterRegistry.counter("rag.pii.detected.count", "where", "answer").increment();
+            logSecurityEventSafely(SecurityEvent.now(SecurityEventType.PII_DETECTED, SecurityEventOutcome.DETECTED,
+                    traceId, currentPrincipalId(), null, null, null, "answer"));
+        }
+
+        meterRegistry.counter("rag.general_ai.count").increment();
+        recordAudit(traceId, provider, activePrompt.promptKey(), activePrompt.version(), diagnostics.outcome(),
+                diagnostics.semanticCandidateCount(), diagnostics.lexicalCandidateCount(),
+                diagnostics.finalCandidateCount(), GroundingStatus.NOT_GROUNDED.name(), false, piiInQuestion,
+                piiInAnswer, startNanos, AuditOutcome.GENERAL_AI_ANSWER, null);
+
+        return RagAnswer.generalAi(completion.text(), traceId, piiInAnswer);
+    }
+
+    /**
+     * Whether a provider failure was a timeout, which the budget ledger treats differently from
+     * a definite rejection: a timed-out request may still have been processed and billed.
+     * Recognised by the transient classification the LLM adapters already assign, rather than by
+     * exception type - the vendor SDKs wrap their own timeouts inconsistently.
+     */
+    private static boolean isTimeout(RuntimeException e) {
+        String text = (e.getMessage() == null ? "" : e.getMessage()).toLowerCase(java.util.Locale.ROOT);
+        return e instanceof TransientProcessingException
+                || text.contains("timeout") || text.contains("timed out");
     }
 
     private void recordAudit(String traceId, String provider, String promptKey, Integer promptVersion,
@@ -265,6 +395,13 @@ public final class AskInsuranceKnowledgeUseCase {
             case GROUNDED_ANSWER -> meterRegistry.counter("rag.grounding.count").increment();
             case NO_ANSWER -> meterRegistry.counter("rag.no_answer.count").increment();
             case BLOCKED_BY_GUARDRAIL -> meterRegistry.counter("rag.blocked.count").increment();
+            // GENERAL_AI_ANSWER's counter (rag.general_ai.count) is incremented at its own call
+            // site rather than here, deliberately: it must NOT contribute to rag.grounding.count,
+            // which is the metric a dashboard reads as "answers backed by our documentation".
+            // Folding an unverified answer into that number would overstate exactly the thing
+            // this feature is designed to keep separate.
+            case GENERAL_AI_ANSWER -> {
+            }
             // ERROR intentionally has no dedicated counter: rag.request.latency's outcome=ERROR
             // tag already counts it, and a second, independently-incremented meter for the same
             // event is one more thing that can silently disagree with the first.
@@ -323,13 +460,35 @@ public final class AskInsuranceKnowledgeUseCase {
         }
     }
 
+    /**
+     * The evidence-sufficiency decision, deliberately decoupled from candidate generation
+     * (FASE 28). {@code HybridRetrievalService} now retrieves lexically with Spanish
+     * OR-semantics, which is what finally made the lexical branch contribute candidates at all
+     * (~3.6% of retrievals before), but it also means a single shared word is enough to produce
+     * a candidate. Candidate generation optimizing for recall and grounding optimizing for
+     * precision are different jobs, and conflating them is what made the earlier attempt at this
+     * fix regress: under the previous {@code lexicalScore >= minRank} rule, an out-of-corpus
+     * question measured {@code ts_rank_cd} 2.0 against an unrelated chunk - 40x the configured
+     * {@code minRank} - and would have been answered as DOCUMENT_GROUNDED.
+     *
+     * <p>So the lexical branch may only ground an answer when the candidate clears {@code
+     * minRank} <em>and</em> covers at least {@code minTermCoverage} of the question's lexemes.
+     * Coverage is the query-length-normalized signal; rank is not, and rank alone is therefore
+     * never sufficient. The semantic criterion is unchanged (FASE 5's original) and remains the
+     * primary grounding signal when real embeddings are in use.
+     */
     private boolean hasQualifyingCandidate(List<HybridRetrievalResult> candidates) {
-        double semanticThreshold = properties.rag().semantic().similarityThreshold();
-        double minLexicalRank = properties.rag().lexical().minRank();
-        return candidates.stream()
-                .anyMatch(candidate -> (candidate.semanticScore() != null
-                        && candidate.semanticScore() >= semanticThreshold)
-                        || (candidate.lexicalScore() != null && candidate.lexicalScore() >= minLexicalRank));
+        return candidates.stream().anyMatch(this::isSufficientEvidence);
+    }
+
+    private boolean isSufficientEvidence(HybridRetrievalResult candidate) {
+        boolean semanticallyGrounded = candidate.semanticScore() != null
+                && candidate.semanticScore() >= properties.rag().semantic().similarityThreshold();
+        boolean lexicallyGrounded = candidate.lexicalScore() != null
+                && candidate.lexicalScore() >= properties.rag().lexical().minRank()
+                && candidate.lexicalTermCoverage() != null
+                && candidate.lexicalTermCoverage() >= properties.rag().lexical().minTermCoverage();
+        return semanticallyGrounded || lexicallyGrounded;
     }
 
     private List<SourceReference> buildSources(List<HybridRetrievalResult> candidates) {

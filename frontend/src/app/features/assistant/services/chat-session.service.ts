@@ -69,11 +69,22 @@ export class ChatSessionService {
     };
   }
 
+  /**
+   * A total mapping over `AnswerMode`, deliberately exhaustive rather than defaulting: if the
+   * backend ever adds a fifth mode, this must fail to compile instead of silently rendering it
+   * as a grounded answer - which for an unverified answer would be the worst possible default.
+   */
   private kindOf(answer: RagAnswer): AssistantMessageKind {
-    if (answer.blocked) {
-      return 'blocked';
+    switch (answer.answerMode) {
+      case 'DOCUMENT_GROUNDED':
+        return 'grounded';
+      case 'GENERAL_AI_UNVERIFIED':
+        return 'general-ai';
+      case 'NO_ANSWER':
+        return 'no-answer';
+      case 'BLOCKED':
+        return 'blocked';
     }
-    return answer.grounding.status === 'GROUNDED' ? 'grounded' : 'no-answer';
   }
 
   private toErrorMessage(error: ApiError): AssistantMessage {

@@ -2,10 +2,19 @@ import type { SourceReference } from '../../../core/models/chat.model';
 
 /**
  * Client-side conversation model - not a backend DTO. Built entirely from real `RagAnswer`/
- * `ApiError` fields (see ChatSessionService); `kind` is derived from `RagAnswer.grounding.status`
- * and `RagAnswer.blocked`, never guessed from message text.
+ * `ApiError` fields (see ChatSessionService); `kind` maps 1:1 from `RagAnswer.answerMode`, never
+ * guessed from message text.
+ *
+ * `'error'` is the only kind with no `answerMode` counterpart: it represents a transport or
+ * server failure where no `RagAnswer` was received at all, which is a different thing from any
+ * answer the backend can return.
  */
-export type AssistantMessageKind = 'grounded' | 'no-answer' | 'blocked' | 'error';
+export type AssistantMessageKind =
+  | 'grounded'
+  | 'general-ai'
+  | 'no-answer'
+  | 'blocked'
+  | 'error';
 
 export interface UserMessage {
   readonly id: string;

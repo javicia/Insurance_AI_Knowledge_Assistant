@@ -15,6 +15,9 @@ public final class WellKnownAiSystems {
 
     public static final String INSURANCE_RAG_SYSTEM_PROMPT_KEY = "insurance-rag-system-prompt";
 
+    /** Seeded by {@code V9__general_ai_fallback_prompt.sql} - see {@code GeneralAiSystemPrompt}. */
+    public static final String GENERAL_AI_SYSTEM_PROMPT_KEY = "general-ai-system-prompt";
+
     private WellKnownAiSystems() {
     }
 }

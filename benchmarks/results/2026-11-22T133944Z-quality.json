@@ -1,0 +1,84 @@
+{
+  "benchmark": "quality",
+  "environment": {
+    "captured_at": "2026-11-22T13:39:42.505291+00:00",
+    "git_commit": "eeab21a",
+    "host_os": "Windows-10-10.0.26300-SP0",
+    "python": "3.11.4",
+    "environment_name": "local-docker-desktop",
+    "environment_notes": "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host.",
+    "llm_provider": "fake",
+    "semantic_similarity_threshold": "0.75 (default from application.yaml)",
+    "corpus": {
+      "curated_corpus_documents_on_disk": 26,
+      "curated_corpus_documents_in_db": 26,
+      "curated_corpus_chunks": 1650,
+      "search_space_documents": 44,
+      "search_space_chunks": 2037,
+      "search_space_embeddings": 2037
+    }
+  },
+  "topology": "waf",
+  "dataset": "docs/testing/evaluation_dataset.csv",
+  "measurement_caveats": [
+    "El proveedor LLM activo determina si estas cifras son extrapolables. Con `fake`, la rama semantica usa FakeEmbeddingModelAdapter (hashing de bolsa de palabras), no un modelo de embeddings real: las cifras son medidas reales de ESTE despliegue, no una prediccion del rendimiento con embeddings de produccion.",
+    "No se evalua la redaccion de la respuesta: con el proveedor fake el texto es un sustituto fijo. Cualquier metrica de calidad de redaccion seria UNKNOWN.",
+    "El ranking compite contra TODO el espacio de busqueda embebido, no solo contra el corpus curado - ver environment.corpus en este mismo fichero."
+  ],
+  "requests_failed": [],
+  "latency": {
+    "count": 12,
+    "min_ms": 64.36,
+    "p50_ms": 87.73,
+    "p75_ms": 116.04,
+    "p90_ms": 140.35,
+    "p95_ms": 140.35,
+    "p99_ms": 248.99,
+    "max_ms": 248.99,
+    "mean_ms": 109.37,
+    "stdev_ms": 48.9
+  },
+  "summary": {
+    "cases_executed": 12,
+    "cases_answered_by_api": 12,
+    "overall_accuracy": 0.9167,
+    "by_expected_behaviour": {
+      "GROUNDED": {
+        "cases": 12,
+        "correct": 11,
+        "accuracy": 0.9167
+      }
+    },
+    "citation_presence_on_grounded_answers": 0.9167,
+    "error_directions": {
+      "false_grounding_rate": null,
+      "false_no_answer_rate": 0.0833,
+      "general_ai_answers": 0
+    },
+    "retrieval": {
+      "cases_with_expected_document": 12,
+      "recall_at_1": 0.1667,
+      "recall_at_3": 0.25,
+      "recall_at_5": 0.3333,
+      "recall_at_8": 0.5833,
+      "mrr": 0.2632,
+      "empty_retrieval_rate": 0.0833
+    },
+    "by_category": {
+      "cobertura": {
+        "cases": 12,
+        "accuracy": 0.9167
+      }
+    },
+    "by_difficulty": {
+      "baja": {
+        "cases": 4,
+        "accuracy": 1.0
+      },
+      "media": {
+        "cases": 8,
+        "accuracy": 0.875
+      }
+    }
+  }
+}

@@ -34,7 +34,15 @@ import java.util.regex.Pattern;
 @Component
 public class QueryExpander {
 
-    private static final Pattern WORD_PATTERN = Pattern.compile("[a-z0-9]+");
+    /**
+     * Unicode-aware since FASE 29 (previously {@code [a-z0-9]+}, which split every accented
+     * Spanish word at the accent - {@code "daños"} became {@code ["da", "os"]}, so no accented
+     * word could ever match a synonym key). This is a tokenization fix only; it deliberately
+     * changes no entry of {@link #SYNONYMS}, because the map's content is a business/actuarial
+     * question, not an engineering one - see this class's note below and FASE 28's DEF-07.
+     */
+    private static final Pattern WORD_PATTERN = Pattern.compile("[\\p{L}\\p{N}]+",
+            Pattern.UNICODE_CHARACTER_CLASS);
 
     private static final Map<String, List<String>> SYNONYMS = Map.of(
             "damage", List.of("harm", "loss"),

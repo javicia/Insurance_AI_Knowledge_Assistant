@@ -22,6 +22,29 @@
             }
             <app-citation-list [sources]="msg.sources" />
           }
+          @case ('general-ai') {
+            <div class="message-bubble__unverified-notice" role="note">
+              <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">info</mat-icon>
+              <div>
+                <p class="message-bubble__unverified-title">General information, not from our documentation</p>
+                <p class="message-bubble__unverified-message">
+                  Our insurance documentation did not cover this question, so this answer comes from the
+                  assistant's general knowledge. It is not based on any policy and has no sources. Do not
+                  rely on it for coverage, exclusions or amounts.
+                </p>
+              </div>
+            </div>
+            <p class="message-bubble__text">{{ msg.text }}</p>
+            @if (msg.piiDetected) {
+              <div class="message-bubble__pii-notice">
+                <mat-icon fontSet="material-symbols-rounded" aria-hidden="true">privacy_tip</mat-icon>
+                <span>Sensitive information detected in this answer</span>
+              </div>
+            }
+            @if (msg.traceId) {
+              <app-technical-details [traceId]="msg.traceId" />
+            }
+          }
           @case ('no-answer') {
             <div class="message-bubble__state">
               <mat-icon class="message-bubble__state-icon" fontSet="material-symbols-rounded" aria-hidden="true">search_off</mat-icon>

@@ -15,15 +15,24 @@ import java.util.Objects;
  * stage returns new instances so the original semantic/lexical evidence is never lost, which is
  * what makes citations able to answer "why did this chunk reach the context" (section 24).
  *
- * <p>{@code semanticScore}/{@code semanticRank} and {@code lexicalScore}/{@code lexicalRank} are
- * independently nullable: a candidate found by only one retrieval branch has the other pair set
- * to {@code null} (never a fabricated 0), which is exactly what {@link #source()} reports and
- * what {@code AskInsuranceKnowledgeUseCase}'s no-answer policy inspects directly - see
+ * <p>{@code semanticScore}/{@code semanticRank} and {@code lexicalScore}/{@code lexicalRank}/
+ * {@code lexicalTermCoverage} are independently nullable: a candidate found by only one
+ * retrieval branch has the other branch's fields set to {@code null} (never a fabricated 0),
+ * which is exactly what {@link #source()} reports and what {@code
+ * AskInsuranceKnowledgeUseCase}'s no-answer policy inspects directly - see
  * {@code docs/rag/HYBRID_SEARCH.md}.
+ *
+ * <p><b>{@code lexicalTermCoverage} (FASE 28):</b> carried alongside {@code lexicalScore}
+ * because it, not the score, is what the grounding decision may legitimately rest on - see
+ * {@link LexicalSearchResult#termCoverage()} for the measurement that motivated it. It travels
+ * with the candidate rather than being recomputed downstream so that grounding inspects the
+ * coverage of the <em>actual query that retrieved this chunk</em>, which is the only query it
+ * is meaningful against.
  */
 public record HybridRetrievalResult(DocumentChunkId chunkId, DocumentId documentId,
         DocumentVersionId documentVersionId, String content, ChunkMetadata metadata, Double semanticScore,
-        Integer semanticRank, Double lexicalScore, Integer lexicalRank, double fusionScore, Double rerankerScore) {
+        Integer semanticRank, Double lexicalScore, Integer lexicalRank, Double lexicalTermCoverage,
+        double fusionScore, Double rerankerScore) {
 
     public HybridRetrievalResult {
         Objects.requireNonNull(chunkId, "chunkId must not be null");
@@ -36,7 +45,7 @@ public record HybridRetrievalResult(DocumentChunkId chunkId, DocumentId document
     /** Returns a copy with {@code rerankerScore} set - the only field {@code RerankerPort} may add. */
     public HybridRetrievalResult withRerankerScore(double newRerankerScore) {
         return new HybridRetrievalResult(chunkId, documentId, documentVersionId, content, metadata, semanticScore,
-                semanticRank, lexicalScore, lexicalRank, fusionScore, newRerankerScore);
+                semanticRank, lexicalScore, lexicalRank, lexicalTermCoverage, fusionScore, newRerankerScore);
     }
 
     public RetrievalSource source() {

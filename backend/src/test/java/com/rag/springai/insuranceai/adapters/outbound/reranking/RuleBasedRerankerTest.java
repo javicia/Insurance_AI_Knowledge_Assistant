@@ -22,7 +22,7 @@ class RuleBasedRerankerTest {
     private HybridRetrievalResult candidate(String suffix, String content, double fusionScore) {
         DocumentChunkId chunkId = new DocumentChunkId(UUID.nameUUIDFromBytes(suffix.getBytes()));
         return new HybridRetrievalResult(chunkId, documentId, documentVersionId, content, ChunkMetadata.empty(), 0.8,
-                1, null, null, fusionScore, null);
+                1, null, null, null, fusionScore, null);
     }
 
     @Test

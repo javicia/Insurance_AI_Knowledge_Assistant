@@ -39,15 +39,30 @@ export interface SourceReference {
 }
 
 /**
- * `blocked` and `piiDetected` were added to the backend during FASE 15 frontend integration
- * (see RagAnswer.java's own Javadoc) - both are genuine response fields, not derived/guessed
- * client-side from message text.
+ * Where the answer's content came from (backend FASE 28, see AnswerMode.java). Replaces the
+ * earlier `blocked` boolean, which could express only two of these four states and had to be
+ * read together with `grounding.status` to mean anything.
+ *
+ * `GENERAL_AI_UNVERIFIED` is an answer written from the language model's own general knowledge,
+ * because the documentation held no sufficient evidence. It never carries citations and must be
+ * rendered with a visible warning: an employee cannot tell a policy fact from a model's general
+ * knowledge unless the UI says so.
+ */
+export type AnswerMode =
+  | 'DOCUMENT_GROUNDED'
+  | 'GENERAL_AI_UNVERIFIED'
+  | 'NO_ANSWER'
+  | 'BLOCKED';
+
+/**
+ * `answerMode` and `piiDetected` are genuine backend response fields (see RagAnswer.java's own
+ * Javadoc), never derived or guessed client-side from message text.
  */
 export interface RagAnswer {
   readonly answer: string;
   readonly sources: readonly SourceReference[];
   readonly grounding: Grounding;
+  readonly answerMode: AnswerMode;
   readonly traceId: string;
   readonly piiDetected: boolean;
-  readonly blocked: boolean;
 }

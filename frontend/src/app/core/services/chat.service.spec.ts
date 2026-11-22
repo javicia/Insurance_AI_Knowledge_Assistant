@@ -28,7 +28,7 @@ describe('ChatService', () => {
       grounding: { status: 'GROUNDED' },
       traceId: 'trace-1',
       piiDetected: false,
-      blocked: false,
+      answerMode: 'DOCUMENT_GROUNDED',
     };
 
     let received: RagAnswer | undefined;

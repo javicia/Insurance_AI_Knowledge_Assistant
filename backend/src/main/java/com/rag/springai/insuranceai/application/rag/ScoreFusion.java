@@ -54,6 +54,7 @@ public class ScoreFusion {
                             result.content(), result.metadata()));
             candidate.lexicalScore = result.lexicalScore();
             candidate.lexicalRank = rank;
+            candidate.lexicalTermCoverage = result.termCoverage();
         }
 
         List<HybridRetrievalResult> fused = new ArrayList<>();
@@ -62,7 +63,7 @@ public class ScoreFusion {
                     rrfK);
             fused.add(new HybridRetrievalResult(candidate.chunkId, candidate.documentId, candidate.documentVersionId,
                     candidate.content, candidate.metadata, candidate.semanticScore, candidate.semanticRank,
-                    candidate.lexicalScore, candidate.lexicalRank, fusionScore, null));
+                    candidate.lexicalScore, candidate.lexicalRank, candidate.lexicalTermCoverage, fusionScore, null));
         }
 
         // Deterministic tie-break: equal fusionScore falls back to chunkId ordering rather than
@@ -88,6 +89,7 @@ public class ScoreFusion {
         private Integer semanticRank;
         private Double lexicalScore;
         private Integer lexicalRank;
+        private Double lexicalTermCoverage;
 
         private Candidate(DocumentChunkId chunkId, DocumentId documentId, DocumentVersionId documentVersionId,
                 String content, ChunkMetadata metadata) {

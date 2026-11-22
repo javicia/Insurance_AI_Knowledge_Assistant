@@ -91,18 +91,87 @@ class PostgresLexicalSearchAdapterTest {
 
     @Test
     void findsAChunkByAStemmedPartialMatch() {
-        // English text-search stemming reduces verb inflections to a shared stem ("covers" and
-        // "covered" both stem to "cover") - proving this is real PostgreSQL FTS matching, not
-        // literal substring matching. Verified empirically: to_tsvector('english', 'covers') and
-        // to_tsquery('english', 'covered') both yield the 'cover' lexeme. A noun-derived form
-        // like "coverage" is deliberately NOT used here - PostgreSQL's english stemmer keeps it
-        // as a distinct 'coverag' stem, so it would not exercise this behaviour.
-        DocumentChunk chunk = index("The policy covers water damage.", ChunkMetadata.empty());
+        // Asserted in Spanish since FASE 28: the production configuration is spanish_unaccent
+        // (V8__spanish_full_text_search.sql), so an English stemming assertion would be testing
+        // a configuration this project deliberately no longer has. The property under test is
+        // unchanged - that this is real PostgreSQL FTS stemming rather than substring matching.
+        // Verified empirically against pgvector/pgvector:pg16: "cubre", "cubren" and "cubrir" all
+        // yield the 'cubr' lexeme under spanish_unaccent. ("cubierto"/"cubierta" deliberately
+        // avoided - Snowball keeps the irregular participle as a distinct 'cubiert' stem, so it
+        // would not exercise this behaviour. See docs/rag/AUDITORIA_RAG_ES.md.)
+        DocumentChunk chunk = index("La póliza cubre los daños por agua.", ChunkMetadata.empty());
 
-        List<LexicalSearchResult> results = adapter.search("covered", 8, RetrievalFilter.none());
+        List<LexicalSearchResult> results = adapter.search("cubrir", 8, RetrievalFilter.none());
 
         assertEquals(1, results.size());
         assertEquals(chunk.id(), results.get(0).chunkId());
+    }
+
+    @Test
+    void findsAChunkWhenTheQuestionIsTypedWithoutAccents() {
+        // The real reason spanish_unaccent copies 'spanish' and adds the unaccent dictionary
+        // rather than just using 'spanish': employees type questions without accents, and the
+        // corpus is correctly accented. Under the previous 'english' configuration neither
+        // stemming nor accent folding applied, so this question matched nothing at all.
+        DocumentChunk chunk = index("La póliza cubre los daños del vehículo asegurado.", ChunkMetadata.empty());
+
+        List<LexicalSearchResult> results = adapter.search("¿que danos del vehiculo cubre la poliza?", 8,
+                RetrievalFilter.none());
+
+        assertEquals(1, results.size());
+        assertEquals(chunk.id(), results.get(0).chunkId());
+    }
+
+    @Test
+    void matchesAMultiTermSpanishQuestionWhereOnlySomeTermsArePresent() {
+        // The FASE 28 regression test for the ~3.6% lexical contribution rate. Under the previous
+        // websearch_to_tsquery AND-semantics, EVERY lexeme of this question had to appear in one
+        // chunk, so a natural-language question never matched - "granizo" alone being absent was
+        // enough to return nothing. OR-semantics is what makes the lexical branch contribute
+        // candidates at all; term coverage (asserted below) is what keeps that from loosening
+        // grounding.
+        DocumentChunk chunk = index("La póliza de todo riesgo cubre los daños por granizo.", ChunkMetadata.empty());
+
+        List<LexicalSearchResult> results = adapter.search("¿Cubre la póliza de todo riesgo los daños por pedrisco?",
+                8, RetrievalFilter.none());
+
+        assertEquals(1, results.size());
+        assertEquals(chunk.id(), results.get(0).chunkId());
+    }
+
+    @Test
+    void reportsHighTermCoverageForAQuestionTheChunkActuallyAnswers() {
+        index("La franquicia aplicable en la cobertura de lunas es de 100 euros por siniestro.",
+                ChunkMetadata.empty());
+
+        LexicalSearchResult result = adapter
+                .search("¿Cuál es la franquicia de la cobertura de lunas?", 8, RetrievalFilter.none())
+                .get(0);
+
+        assertEquals(result.queryTermCount(), result.matchedTermCount(),
+                "every lexeme of an in-corpus question should be present in the chunk that answers it");
+        assertEquals(1.0, result.termCoverage(), 0.0001);
+    }
+
+    @Test
+    void reportsLowTermCoverageForAnOutOfCorpusQuestionThatStillMatchesLexically() {
+        // The defect that made the previous attempt at this fix unsafe, captured as a test. This
+        // chunk is retrieved (it shares "cubrir" and "seguro" with the question) and earns a
+        // ts_rank_cd far above insurance-ai.rag.lexical.min-rank, so the pre-FASE-28 grounding
+        // rule - any lexical match clearing min-rank - would have answered a HOME insurance
+        // question from an AUTO policy. Coverage is the signal that separates them, which is why
+        // AskInsuranceKnowledgeUseCase gates grounding on it and not on the score.
+        index("El seguro de auto cubre la responsabilidad civil obligatoria.", ChunkMetadata.empty());
+
+        List<LexicalSearchResult> results = adapter.search("¿Cubre mi seguro de hogar las inundaciones del sótano?", 8,
+                RetrievalFilter.none());
+
+        assertEquals(1, results.size(), "the chunk is still retrieved - candidate generation is deliberately liberal");
+        LexicalSearchResult result = results.get(0);
+        assertTrue(result.lexicalScore() > 0.05,
+                "ts_rank_cd clears min-rank, so rank alone cannot reject this: " + result.lexicalScore());
+        assertTrue(result.termCoverage() < 0.6,
+                "coverage must stay below min-term-coverage so grounding rejects it: " + result.termCoverage());
     }
 
     @Test

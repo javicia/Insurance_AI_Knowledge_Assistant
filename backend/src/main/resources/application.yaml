@@ -148,6 +148,25 @@ insurance-ai:
       # arriving and this threshold would become load-bearing). Re-measure before assuming these
       # numbers hold for a different corpus. See docs/rag/HYBRID_SEARCH.md.
       min-rank: 0.05
+      # FASE 28. The "if the matching semantics are ever loosened" caveat above is now the actual
+      # configuration: V8__spanish_full_text_search.sql + PostgresLexicalSearchAdapter retrieve
+      # with Spanish OR-semantics, so weak partial matches DO arrive. The same measurement that
+      # motivated the switch also showed min-rank cannot be what gates them - ts_rank_cd is
+      # unnormalized, so it has no transferable "good enough" value. Measured on the auto corpus
+      # (spanish_unaccent config, OR-semantics, best candidate per question):
+      #
+      #   out-of-corpus  "seguro de hogar / inundaciones"   rank 2.000   coverage 0.40
+      #   out-of-corpus  "beneficiarios de seguro de vida"  rank 1.000   coverage 0.25
+      #   out-of-corpus  "capital de Francia"               no matching chunks
+      #   in-corpus      "franquicia de la luna"            rank 2.400   coverage 0.67
+      #   in-corpus      "responsabilidad civil obligatoria" rank 4.000  coverage 1.00
+      #
+      # Note the overlap on rank (out-of-corpus 2.000 vs in-corpus 2.400) against a clean
+      # separation on coverage (<=0.40 vs >=0.67). 0.6 sits inside that gap. Coverage is a
+      # fraction of the question's own lexemes, so unlike min-rank it is scale-free and a single
+      # value transfers across questions - but the GAP is corpus-specific, so re-measure before
+      # assuming 0.6 holds elsewhere. See docs/rag/AUDITORIA_RAG_ES.md.
+      min-term-coverage: 0.6
     hybrid:
       # Candidates carried into reranking, before the final-top-k cut.
       candidate-pool-size: 20
@@ -164,6 +183,40 @@ insurance-ai:
       # PoC approximation of a context window budget - character count, not real token
       # counting. See docs/rag/HYBRID_SEARCH.md.
       max-characters: 6000
+    # FASE 28. When the documentation holds no sufficient evidence, optionally answer from the
+    # LLM's own general knowledge instead of returning NO_ANSWER - clearly labelled
+    # GENERAL_AI_UNVERIFIED and never carrying citations.
+    #
+    # Ships DISABLED. This is not caution for its own sake: enabling it forwards questions to a
+    # third-party provider on a path whose answers have no documentary backing, so it changes
+    # both the data-processing posture and the per-query cost profile. A deployment should turn
+    # it on deliberately, after reviewing docs/rag/ESTRATEGIA_FALLBACK_IA_ES.md, not inherit it.
+    #
+    # Note that enabling it does NOT permit contractual answers: GeneralAiFallbackPolicy refuses
+    # questions asking for a determination about a specific policy, coverage, exclusion,
+    # deductible, indemnity or eligibility regardless of this setting, and there is deliberately
+    # no property to override that.
+    general-ai-fallback:
+      enabled: false
+      # FASE 29 (closes FASE 28's DEF-08). Spend caps in the same currency unit as
+      # insurance-ai.benchmark.pricing. GeneralAiBudgetLedger reserves the WORST CASE
+      # (max-tokens-per-request priced at the output rate) before the provider is called, then
+      # reconciles down to the reported usage - counting spend afterwards cannot enforce a limit,
+      # because the money is already gone and two concurrent requests both see the same headroom.
+      #
+      # These are deliberately small: they are a safety net for a PoC, not a capacity plan. A
+      # deployment must set them from its own tariff and expected volume. There is no "unlimited"
+      # value - the properties are mandatory, because an unbounded fallback has no safe default.
+      daily-budget: "1.00"
+      monthly-budget: "20.00"
+      # Bounds the worst case the ledger has to reserve per request. Also the only thing standing
+      # between one pathological question and a day's budget.
+      max-tokens-per-request: 2000
+      # Whether a question containing detected PII may be forwarded to the general-AI path. The
+      # grounded path tolerates PII in a question because it stays inside this system; sending it
+      # to an external provider is a different decision with a different legal basis, so it needs
+      # its own switch rather than inheriting the grounded path's tolerance.
+      allow-questions-with-pii: false
   security:
     prompt-injection:
       enabled: true

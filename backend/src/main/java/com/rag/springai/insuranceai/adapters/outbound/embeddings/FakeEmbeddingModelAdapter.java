@@ -37,7 +37,36 @@ public class FakeEmbeddingModelAdapter implements EmbeddingModelPort {
 
     static final int DIMENSIONS = 1536;
 
-    private static final Pattern WORD_PATTERN = Pattern.compile("[a-z0-9]+");
+    /**
+     * Unicode-aware since FASE 29. This was {@code [a-z0-9]+}, which matches no accented Spanish
+     * character and therefore split every such word at the accent. Measured on the real corpus
+     * vocabulary:
+     *
+     * <pre>
+     *   "daños"          -&gt; ["da", "os"]
+     *   "colisión"       -&gt; ["colisi", "n"]
+     *   "póliza"         -&gt; ["p", "liza"]
+     *   "vehículo"       -&gt; ["veh", "culo"]
+     *   "indemnización"  -&gt; ["indemnizaci", "n"]
+     * </pre>
+     *
+     * Two compounding harms, not one. The obvious one is lost signal. The worse one is
+     * manufactured signal: <em>every</em> word ending in {@code -ión} emits the same {@code "n"}
+     * fragment, so {@code colisión}, {@code exclusión}, {@code indemnización} and
+     * {@code protección} all pile into one hash bucket. Unrelated documents are thereby pushed
+     * together in vector space, which is a direct mechanism for a false semantic match - and the
+     * semantic branch is the one branch term coverage cannot gate (see
+     * {@code AskInsuranceKnowledgeUseCase#isSufficientEvidence}).
+     *
+     * <p><b>Changing this changes the embedding function</b>, so vectors produced by the previous
+     * tokenizer are not comparable with queries produced by this one. That is why
+     * {@link #descriptor()} reports {@code v2}: {@code vector_store.metadata} records
+     * {@code embeddingModelVersion} per chunk, so a corpus still holding {@code v1} vectors is
+     * detectable rather than silently mis-scored. A deployment taking this change must re-embed -
+     * see {@code docs/rag/FASE_29_CALIBRACION_GROUNDING_ES.md}.
+     */
+    private static final Pattern WORD_PATTERN = Pattern.compile("[\\p{L}\\p{N}]+",
+            Pattern.UNICODE_CHARACTER_CLASS);
 
     private final MeterRegistry meterRegistry;
 
@@ -80,7 +109,10 @@ public class FakeEmbeddingModelAdapter implements EmbeddingModelPort {
 
     @Override
     public EmbeddingModelDescriptor descriptor() {
-        return new EmbeddingModelDescriptor("fake", "hashing-bag-of-words", "v1", DIMENSIONS,
+        // v2 since FASE 29's Unicode tokenizer fix. The version is persisted per chunk in
+        // vector_store.metadata.embeddingModelVersion, which is what makes a corpus embedded by
+        // the old tokenizer identifiable instead of silently incomparable.
+        return new EmbeddingModelDescriptor("fake", "hashing-bag-of-words", "v2", DIMENSIONS,
                 SimilarityMetric.COSINE);
     }
 }

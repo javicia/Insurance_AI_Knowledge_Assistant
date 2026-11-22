@@ -23,7 +23,7 @@ class ContextSelectorTest {
         DocumentChunkId chunkId = new DocumentChunkId(UUID.nameUUIDFromBytes(suffix.getBytes()));
         ChunkMetadata metadata = new ChunkMetadata(1, null, section, 1);
         return new HybridRetrievalResult(chunkId, documentId, documentVersionId, content, metadata, 0.9, 1, null,
-                null, 0.5, null);
+                null, null, 0.5, null);
     }
 
     @Test

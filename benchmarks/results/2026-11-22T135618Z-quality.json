@@ -1,0 +1,179 @@
+{
+  "benchmark": "quality",
+  "environment": {
+    "captured_at": "2026-11-22T13:56:17.612336+00:00",
+    "git_commit": "eeab21a",
+    "host_os": "Windows-10-10.0.26300-SP0",
+    "python": "3.11.4",
+    "environment_name": "local-docker-desktop",
+    "environment_notes": "Windows 11 + Docker Desktop (WSL2). Other projects' containers may share the host.",
+    "llm_provider": "fake",
+    "semantic_similarity_threshold": "0.75 (default from application.yaml)",
+    "corpus": {
+      "curated_corpus_documents_on_disk": 26,
+      "curated_corpus_documents_in_db": 26,
+      "curated_corpus_chunks": 1650,
+      "search_space_documents": 44,
+      "search_space_chunks": 2037,
+      "search_space_embeddings": 2037
+    }
+  },
+  "topology": "waf",
+  "dataset": "docs/testing/evaluation_dataset.csv",
+  "measurement_caveats": [
+    "El proveedor LLM activo determina si estas cifras son extrapolables. Con `fake`, la rama semantica usa FakeEmbeddingModelAdapter (hashing de bolsa de palabras), no un modelo de embeddings real: las cifras son medidas reales de ESTE despliegue, no una prediccion del rendimiento con embeddings de produccion.",
+    "No se evalua la redaccion de la respuesta: con el proveedor fake el texto es un sustituto fijo. Cualquier metrica de calidad de redaccion seria UNKNOWN.",
+    "El ranking compite contra TODO el espacio de busqueda embebido, no solo contra el corpus curado - ver environment.corpus en este mismo fichero."
+  ],
+  "requests_failed": [],
+  "latency": {
+    "count": 255,
+    "min_ms": 44.6,
+    "p50_ms": 110.17,
+    "p75_ms": 220.35,
+    "p90_ms": 361.75,
+    "p95_ms": 474.35,
+    "p99_ms": 771.73,
+    "max_ms": 1038.74,
+    "mean_ms": 173.21,
+    "stdev_ms": 149.32
+  },
+  "summary": {
+    "cases_executed": 255,
+    "cases_answered_by_api": 255,
+    "overall_accuracy": 0.8314,
+    "by_expected_behaviour": {
+      "BLOCKED": {
+        "cases": 14,
+        "correct": 14,
+        "accuracy": 1.0
+      },
+      "DEPENDS": {
+        "cases": 30,
+        "correct": 30,
+        "accuracy": 1.0
+      },
+      "GROUNDED": {
+        "cases": 153,
+        "correct": 113,
+        "accuracy": 0.7386
+      },
+      "NO_ANSWER": {
+        "cases": 58,
+        "correct": 55,
+        "accuracy": 0.9483
+      }
+    },
+    "citation_presence_on_grounded_answers": 0.7386,
+    "error_directions": {
+      "false_grounding_rate": 0.0517,
+      "false_no_answer_rate": 0.2614,
+      "general_ai_answers": 0
+    },
+    "retrieval": {
+      "cases_with_expected_document": 153,
+      "recall_at_1": 0.2157,
+      "recall_at_3": 0.366,
+      "recall_at_5": 0.4379,
+      "recall_at_8": 0.5621,
+      "mrr": 0.3166,
+      "empty_retrieval_rate": 0.4549
+    },
+    "by_category": {
+      "ambiguo": {
+        "cases": 30,
+        "accuracy": 1.0
+      },
+      "asistencia": {
+        "cases": 8,
+        "accuracy": 0.875
+      },
+      "cobertura": {
+        "cases": 18,
+        "accuracy": 0.8889
+      },
+      "conductores": {
+        "cases": 8,
+        "accuracy": 0.875
+      },
+      "electricos": {
+        "cases": 7,
+        "accuracy": 0.7143
+      },
+      "exclusion": {
+        "cases": 12,
+        "accuracy": 0.5833
+      },
+      "franquicias": {
+        "cases": 9,
+        "accuracy": 0.8889
+      },
+      "hibridos": {
+        "cases": 4,
+        "accuracy": 0.5
+      },
+      "incendio": {
+        "cases": 4,
+        "accuracy": 1.0
+      },
+      "indemnizaciones": {
+        "cases": 4,
+        "accuracy": 1.0
+      },
+      "limites": {
+        "cases": 10,
+        "accuracy": 1.0
+      },
+      "lunas": {
+        "cases": 5,
+        "accuracy": 0.8
+      },
+      "meteorologia": {
+        "cases": 5,
+        "accuracy": 1.0
+      },
+      "no-answer": {
+        "cases": 52,
+        "accuracy": 0.9808
+      },
+      "procedimientos": {
+        "cases": 3,
+        "accuracy": 1.0
+      },
+      "razonamiento": {
+        "cases": 22,
+        "accuracy": 0.2273
+      },
+      "robo": {
+        "cases": 6,
+        "accuracy": 0.8333
+      },
+      "seguridad": {
+        "cases": 20,
+        "accuracy": 0.9
+      },
+      "siniestros": {
+        "cases": 8,
+        "accuracy": 0.75
+      },
+      "temporal": {
+        "cases": 20,
+        "accuracy": 0.75
+      }
+    },
+    "by_difficulty": {
+      "alta": {
+        "cases": 50,
+        "accuracy": 0.6
+      },
+      "baja": {
+        "cases": 77,
+        "accuracy": 0.9351
+      },
+      "media": {
+        "cases": 128,
+        "accuracy": 0.8594
+      }
+    }
+  }
+}

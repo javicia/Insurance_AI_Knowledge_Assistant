@@ -83,10 +83,25 @@ def relevant_documents(case: dict) -> set[str]:
 
 
 def evaluate(case: dict, answer: dict) -> dict:
-    """Scores one case. Every field here is derived from the response, never assumed."""
+    """Scores one case. Every field here is derived from the response, never assumed.
+
+    FASE 29 fix: this read `answer["blocked"]`, a boolean the backend REMOVED in FASE 28 when it
+    introduced `answerMode` (see AnswerMode.java). `.get("blocked")` therefore returned None for
+    every response, so `correct` was unconditionally False for all 14 BLOCKED cases - the suite
+    would have reported a guardrail regression that did not exist. Scoring now reads `answerMode`,
+    the field that actually carries the discriminator.
+
+    `GENERAL_AI_UNVERIFIED` is scored as NOT satisfying a NO_ANSWER expectation, even though its
+    grounding status is NOT_GROUNDED: the system did answer, from general knowledge. Treating it
+    as a correct refusal is the same measurement defect FASE 28 recorded as DEF-05 for
+    EvaluationRunnerService. The fallback should be disabled for evaluation runs anyway; this
+    makes an accidental run visibly wrong instead of silently flattering.
+    """
     expected = case["expected_grounding"]
     status = (answer.get("grounding") or {}).get("status")
-    blocked = bool(answer.get("blocked"))
+    mode = answer.get("answerMode")
+    blocked = mode == "BLOCKED"
+    answered_from_general_ai = mode == "GENERAL_AI_UNVERIFIED"
     sources = answer.get("sources") or []
     retrieved = [document_slug(s.get("document", "")) for s in sources]
 
@@ -99,15 +114,15 @@ def evaluate(case: dict, answer: dict) -> dict:
                 break
 
     if expected == "GROUNDED":
-        correct = status == "GROUNDED" and len(sources) > 0
+        correct = mode == "DOCUMENT_GROUNDED" and len(sources) > 0
     elif expected == "NO_ANSWER":
-        correct = status != "GROUNDED"
+        correct = mode == "NO_ANSWER"
     elif expected == "BLOCKED":
         correct = blocked
     elif expected == "DEPENDS":
         # An ambiguous question may legitimately be answered or refused. The only unacceptable
         # outcome is a confident grounded answer with nothing supporting it.
-        correct = not (status == "GROUNDED" and len(sources) == 0)
+        correct = not (mode == "DOCUMENT_GROUNDED" and len(sources) == 0)
     else:
         correct = False
 
@@ -117,7 +132,9 @@ def evaluate(case: dict, answer: dict) -> dict:
         "difficulty": case["difficulty"],
         "expected_grounding": expected,
         "actual_grounding": status,
+        "answer_mode": mode,
         "blocked": blocked,
+        "answered_from_general_ai": answered_from_general_ai,
         "pii_detected": bool(answer.get("piiDetected")),
         "citations": len(sources),
         "expected_document": ";".join(sorted(wanted)) or None,
@@ -133,7 +150,7 @@ def _rate(numerator: int, denominator: int) -> float | None:
 
 
 def aggregate(rows: list[dict]) -> dict:
-    graded = [r for r in rows if r.get("actual_grounding") is not None or r.get("blocked")]
+    graded = [r for r in rows if r.get("answer_mode") is not None]
     by_expected: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
         by_expected[row["expected_grounding"]].append(row)
@@ -163,6 +180,18 @@ def aggregate(rows: list[dict]) -> dict:
         },
         "citation_presence_on_grounded_answers": _rate(
             sum(1 for r in grounded if r["citations"] > 0), len(grounded)),
+        # The two error directions, reported separately because they are not interchangeable
+        # (FASE 29). A false grounding is an unsupported claim about an insurance contract; a
+        # false no-answer is a usability problem. Overall accuracy averages them into one number
+        # that hides which one a configuration change traded away.
+        "error_directions": {
+            "false_grounding_rate": _rate(
+                sum(1 for r in by_expected.get("NO_ANSWER", []) if r["answer_mode"] == "DOCUMENT_GROUNDED"),
+                len(by_expected.get("NO_ANSWER", []))),
+            "false_no_answer_rate": _rate(
+                sum(1 for r in grounded if r["answer_mode"] == "NO_ANSWER"), len(grounded)),
+            "general_ai_answers": sum(1 for r in rows if r["answered_from_general_ai"]),
+        },
         "retrieval": {
             "cases_with_expected_document": len(ranked),
             **recall,
@@ -240,7 +269,8 @@ def main() -> int:
             rows.append({
                 "id": case["id"], "category": case["category"], "difficulty": case["difficulty"],
                 "expected_grounding": case["expected_grounding"], "actual_grounding": None,
-                "blocked": False, "pii_detected": False, "citations": 0,
+                "answer_mode": None, "blocked": False, "answered_from_general_ai": False,
+                "pii_detected": False, "citations": 0,
                 "expected_document": ";".join(sorted(relevant_documents(case))) or None,
                 "expected_document_rank": None, "retrieved_documents": "",
                 "correct": False,

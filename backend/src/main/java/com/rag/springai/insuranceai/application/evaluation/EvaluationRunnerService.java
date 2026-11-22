@@ -34,6 +34,17 @@ import java.util.Optional;
  * request produces (see {@code RagAnswer#blocked}), but {@code InsuranceEvaluationDataset}
  * contains no injection cases (that resistance is already exercised by FASE 8's {@code
  * SecurityGuardrailIntegrationTest}), so the collapse never actually conflates the two here.
+ *
+ * <p><b>Incompatible with the general-AI fallback (FASE 28), by design.</b> That collapse breaks
+ * down for {@link com.rag.springai.insuranceai.application.rag.AnswerMode#GENERAL_AI_UNVERIFIED}:
+ * such an answer is {@code NOT_GROUNDED}, so it would be scored as a no-answer - but the system
+ * did answer, from general knowledge. Every {@code NO_ANSWER} case in the dataset would then
+ * silently PASS while the assistant was in fact answering out-of-corpus questions, which is the
+ * precise opposite of what those cases exist to measure. Rather than mislabel the result, {@link
+ * #run} refuses to start while the fallback is enabled: this dataset measures retrieval and
+ * grounding quality, and a run with the fallback active is not comparable to the baselines it
+ * would be compared against. Disable {@code insurance-ai.rag.general-ai-fallback.enabled} for
+ * evaluation runs - see {@code docs/rag/ESTRATEGIA_FALLBACK_IA_ES.md}.
  */
 @Service
 public class EvaluationRunnerService {
@@ -58,6 +69,13 @@ public class EvaluationRunnerService {
     public EvaluationRun run(String datasetName, List<EvaluationCase> cases) {
         Objects.requireNonNull(datasetName, "datasetName must not be null");
         Objects.requireNonNull(cases, "cases must not be null");
+        if (properties.rag().generalAiFallback().enabled()) {
+            throw new IllegalStateException(
+                    "Evaluation measures retrieval and grounding quality, so it cannot run while "
+                            + "insurance-ai.rag.general-ai-fallback.enabled is true: every NO_ANSWER case would be "
+                            + "scored as passing even when the assistant answered from general knowledge. Disable "
+                            + "the fallback for evaluation runs.");
+        }
 
         Instant startedAt = Instant.now();
         List<EvaluationCaseResult> results = new ArrayList<>();

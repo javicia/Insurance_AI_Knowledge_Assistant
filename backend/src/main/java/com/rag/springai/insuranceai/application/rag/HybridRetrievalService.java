@@ -97,8 +97,13 @@ public class HybridRetrievalService {
 
         List<String> expandedTerms = queryExpander.expand(question, config.queryExpansion().enabled(),
                 config.queryExpansion().maxExpandedTerms());
+        // Joined by spaces, not the literal " OR " this used to emit. Since FASE 28 the lexical
+        // adapter tokenizes the whole string and OR-s every resulting lexeme itself, so an
+        // explicit "OR" is both redundant and actively harmful: "or" is not a Spanish stopword,
+        // so it would survive tokenization as a searchable lexeme, match nothing, and dilute the
+        // term-coverage denominator that grounding is now measured against.
         String lexicalQuery = expandedTerms.isEmpty() ? question
-                : question + " OR " + String.join(" OR ", expandedTerms);
+                : question + " " + String.join(" ", expandedTerms);
 
         CompletableFuture<BranchResult<RetrievedChunk>> semanticFuture = CompletableFuture
                 .supplyAsync(() -> {

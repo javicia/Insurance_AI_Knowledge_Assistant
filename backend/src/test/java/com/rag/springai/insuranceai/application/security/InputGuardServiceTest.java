@@ -27,9 +27,10 @@ class InputGuardServiceTest {
 
     private InputGuardService serviceWith(boolean promptInjectionEnabled, boolean piiEnabled) {
         InsuranceAiProperties.Rag rag = new InsuranceAiProperties.Rag(
-                new InsuranceAiProperties.Rag.Semantic(8, 0.75), new InsuranceAiProperties.Rag.Lexical(8, 0.0),
+                new InsuranceAiProperties.Rag.Semantic(8, 0.75), new InsuranceAiProperties.Rag.Lexical(8, 0.0, 0.0),
                 new InsuranceAiProperties.Rag.Hybrid(20, 8, 60.0), new InsuranceAiProperties.Rag.Reranking(true),
-                new InsuranceAiProperties.Rag.QueryExpansion(false, 3), new InsuranceAiProperties.Rag.Context(6000));
+                new InsuranceAiProperties.Rag.QueryExpansion(false, 3), new InsuranceAiProperties.Rag.Context(6000),
+                new InsuranceAiProperties.Rag.GeneralAiFallback(false, false, new java.math.BigDecimal("100"), new java.math.BigDecimal("1000"), 2000));
         InsuranceAiProperties properties = new InsuranceAiProperties(rag,
                 new InsuranceAiProperties.Security(
                         new InsuranceAiProperties.Security.PromptInjection(promptInjectionEnabled),

@@ -19,12 +19,18 @@ import java.util.Objects;
  * NOT_GROUNDED} with only the free-text {@code answer} message distinguishing "no relevant
  * evidence" from "the question was blocked by the prompt-injection guardrail" - a caller (the
  * Angular frontend, brief section 14) would have had to pattern-match against the exact message
- * string to tell them apart, which is fragile and not a real API contract. {@code blocked} is a
- * genuine structured discriminator, added because it is strictly necessary for the frontend to
- * render two different UX states correctly, not a cosmetic addition.
+ * string to tell them apart, which is fragile and not a real API contract.
+ *
+ * <p><b>{@code answerMode} (FASE 28):</b> the structured discriminator for "what kind of answer
+ * is this", and the field callers should branch on. It replaces that {@code blocked} boolean,
+ * which {@link AnswerMode} subsumes exactly while also expressing the general-AI fallback state
+ * a boolean could not. {@code grounding} is retained because {@code GroundingStatus} is what the
+ * AI Audit trail and {@code EvaluationRunnerService} record and compare - but a two-state boolean
+ * would have reintroduced the FASE 15 problem above the moment a third non-grounded state
+ * existed.
  */
-public record RagAnswer(String answer, List<SourceReference> sources, Grounding grounding, String traceId,
-        boolean piiDetected, boolean blocked) {
+public record RagAnswer(String answer, List<SourceReference> sources, Grounding grounding, AnswerMode answerMode,
+        String traceId, boolean piiDetected) {
 
     private static final String NO_ANSWER_MESSAGE =
             "I do not have sufficient information in the available documentation to answer reliably.";
@@ -37,8 +43,17 @@ public record RagAnswer(String answer, List<SourceReference> sources, Grounding 
         Objects.requireNonNull(answer, "answer must not be null");
         Objects.requireNonNull(sources, "sources must not be null");
         Objects.requireNonNull(grounding, "grounding must not be null");
+        Objects.requireNonNull(answerMode, "answerMode must not be null");
         Objects.requireNonNull(traceId, "traceId must not be null");
         sources = List.copyOf(sources);
+        // Enforced here rather than trusted to the call site: a general-AI answer carrying
+        // citations would be the exact failure this feature exists to prevent - a fabricated
+        // provenance claim, indistinguishable by a reader from a real one. The insufficient
+        // evidence that triggered the fallback is not a source for an answer not written from it.
+        if (answerMode != AnswerMode.DOCUMENT_GROUNDED && !sources.isEmpty()) {
+            throw new IllegalArgumentException("only a DOCUMENT_GROUNDED answer may carry sources, but " + answerMode
+                    + " carried " + sources.size());
+        }
     }
 
     /**
@@ -46,8 +61,8 @@ public record RagAnswer(String answer, List<SourceReference> sources, Grounding 
      * chunk above the configured similarity threshold, without ever calling the LLM.
      */
     public static RagAnswer noAnswer(String traceId) {
-        return new RagAnswer(NO_ANSWER_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId,
-                false, false);
+        return new RagAnswer(NO_ANSWER_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED),
+                AnswerMode.NO_ANSWER, traceId, false);
     }
 
     /**
@@ -57,7 +72,17 @@ public record RagAnswer(String answer, List<SourceReference> sources, Grounding 
      * simply a different reason for that than "no relevant evidence".
      */
     public static RagAnswer blocked(String traceId) {
-        return new RagAnswer(BLOCKED_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED), traceId,
-                false, true);
+        return new RagAnswer(BLOCKED_MESSAGE, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED),
+                AnswerMode.BLOCKED, traceId, false);
+    }
+
+    /**
+     * An answer written from the model's own general knowledge, because the documentation held
+     * no sufficient evidence and {@code GeneralAiFallbackPolicy} permitted the fallback (FASE
+     * 28). {@code grounding} is {@code NOT_GROUNDED} - truthfully, since no document grounded it.
+     */
+    public static RagAnswer generalAi(String answer, String traceId, boolean piiDetected) {
+        return new RagAnswer(answer, List.of(), new Grounding(GroundingStatus.NOT_GROUNDED),
+                AnswerMode.GENERAL_AI_UNVERIFIED, traceId, piiDetected);
     }
 }

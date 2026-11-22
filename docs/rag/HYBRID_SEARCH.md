@@ -1,5 +1,12 @@
 # Hybrid Search (FASE 6, Advanced RAG)
 
+> **FASE 28 supersedes parts of this document.** The lexical branch no longer uses the
+> `english` text search configuration or `websearch_to_tsquery`'s AND-semantics, and lexical
+> grounding now additionally requires term coverage, not just `ts_rank_cd >= min-rank`. The
+> pipeline diagram below is also outdated in one detail: the lexical query is no longer joined
+> with a literal `" OR "`. Read **`docs/rag/AUDITORIA_RAG_ES.md`** for the current behaviour,
+> the measurements behind it, and why rank alone cannot gate grounding.
+
 Status: living document. Builds on `docs/rag/RAG_DESIGN.md` (Basic RAG, FASE 5) - read that
 first. See `docs/adr/ADR-006-ADVANCED-RAG-RETRIEVAL-STRATEGY.md` for the architectural reasoning
 behind every decision summarized here.

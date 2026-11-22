@@ -39,7 +39,7 @@ public record InsuranceAiProperties(Rag rag, Security security, Governance gover
      * configure, matching the pipeline in {@code docs/rag/HYBRID_SEARCH.md}.
      */
     public record Rag(Semantic semantic, Lexical lexical, Hybrid hybrid, Reranking reranking,
-            QueryExpansion queryExpansion, Context context) {
+            QueryExpansion queryExpansion, Context context, GeneralAiFallback generalAiFallback) {
 
         public Rag {
             Objects.requireNonNull(semantic, "insurance-ai.rag.semantic must be configured");
@@ -48,6 +48,35 @@ public record InsuranceAiProperties(Rag rag, Security security, Governance gover
             Objects.requireNonNull(reranking, "insurance-ai.rag.reranking must be configured");
             Objects.requireNonNull(queryExpansion, "insurance-ai.rag.query-expansion must be configured");
             Objects.requireNonNull(context, "insurance-ai.rag.context must be configured");
+            Objects.requireNonNull(generalAiFallback, "insurance-ai.rag.general-ai-fallback must be configured");
+        }
+
+        /**
+         * The general-AI fallback (FASE 28) - answering from the model's own knowledge when the
+         * documentation holds no sufficient evidence. Both flags default to {@code false}:
+         * enabling the fallback sends questions to a third-party provider on a path that
+         * produces answers with no documentary backing, which is a deployment decision about
+         * cost and data processing, not a default. See {@code GeneralAiFallbackPolicy} for the
+         * controls that apply even when it is enabled.
+         */
+        public record GeneralAiFallback(boolean enabled, boolean allowQuestionsWithPii,
+                java.math.BigDecimal dailyBudget, java.math.BigDecimal monthlyBudget, int maxTokensPerRequest) {
+
+            public GeneralAiFallback {
+                Objects.requireNonNull(dailyBudget, "insurance-ai.rag.general-ai-fallback.daily-budget "
+                        + "must be configured - an unbounded fallback has no safe default");
+                Objects.requireNonNull(monthlyBudget,
+                        "insurance-ai.rag.general-ai-fallback.monthly-budget must be configured");
+                if (dailyBudget.signum() < 0 || monthlyBudget.signum() < 0) {
+                    throw new IllegalArgumentException(
+                            "insurance-ai.rag.general-ai-fallback budgets must not be negative");
+                }
+                if (maxTokensPerRequest <= 0) {
+                    throw new IllegalArgumentException(
+                            "insurance-ai.rag.general-ai-fallback.max-tokens-per-request must be positive - it is "
+                                    + "what bounds the worst-case cost GeneralAiBudgetLedger reserves per request");
+                }
+            }
         }
 
         /** Vector similarity search (FASE 5's original, unchanged, production default 0.75). */
@@ -75,14 +104,29 @@ public record InsuranceAiProperties(Rag rag, Security security, Governance gover
          * production deployment should raise it once real {@code ts_rank_cd} distributions from
          * its own corpus have been observed, since the scale of that score depends on term
          * frequency and document length and cannot be usefully guessed in the abstract.
+         *
+         * <p><b>{@code minTermCoverage} (FASE 28)</b> is the fraction of the question's distinct
+         * lexemes a candidate must contain to count as lexical grounding evidence. It exists
+         * because {@code minRank} turned out to be structurally incapable of doing that job once
+         * the lexical branch was switched to Spanish OR-semantics
+         * ({@code V8__spanish_full_text_search.sql}): {@code ts_rank_cd} is unnormalized, so its
+         * absolute value says nothing about how much of a question a chunk answers. Measured on
+         * the auto corpus, an out-of-corpus home-insurance question reached {@code ts_rank_cd}
+         * 2.0 - 40x {@code minRank} - on 0.40 coverage, while in-corpus questions sat at
+         * 0.67-1.00. Coverage is scale-free and query-length-normalized, which is what makes a
+         * single threshold transferable across questions in a way {@code minRank} is not.
          */
-        public record Lexical(int topK, double minRank) {
+        public record Lexical(int topK, double minRank, double minTermCoverage) {
             public Lexical {
                 if (topK <= 0) {
                     throw new IllegalArgumentException("insurance-ai.rag.lexical.top-k must be positive");
                 }
                 if (minRank < 0.0) {
                     throw new IllegalArgumentException("insurance-ai.rag.lexical.min-rank must not be negative");
+                }
+                if (minTermCoverage < 0.0 || minTermCoverage > 1.0) {
+                    throw new IllegalArgumentException(
+                            "insurance-ai.rag.lexical.min-term-coverage must be between 0.0 and 1.0");
                 }
             }
         }

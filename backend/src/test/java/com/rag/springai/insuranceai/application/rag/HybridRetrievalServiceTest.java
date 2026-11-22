@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -52,11 +53,12 @@ class HybridRetrievalServiceTest {
 
     private HybridRetrievalService serviceWith(boolean rerankingEnabled, boolean queryExpansionEnabled) {
         InsuranceAiProperties.Rag rag = new InsuranceAiProperties.Rag(
-                new InsuranceAiProperties.Rag.Semantic(8, 0.75), new InsuranceAiProperties.Rag.Lexical(8, 0.0),
+                new InsuranceAiProperties.Rag.Semantic(8, 0.75), new InsuranceAiProperties.Rag.Lexical(8, 0.0, 0.0),
                 new InsuranceAiProperties.Rag.Hybrid(20, 8, 60.0),
                 new InsuranceAiProperties.Rag.Reranking(rerankingEnabled),
                 new InsuranceAiProperties.Rag.QueryExpansion(queryExpansionEnabled, 3),
-                new InsuranceAiProperties.Rag.Context(6000));
+                new InsuranceAiProperties.Rag.Context(6000),
+                new InsuranceAiProperties.Rag.GeneralAiFallback(false, false, new java.math.BigDecimal("100"), new java.math.BigDecimal("1000"), 2000));
         InsuranceAiProperties properties = new InsuranceAiProperties(rag,
                 new InsuranceAiProperties.Security(new InsuranceAiProperties.Security.PromptInjection(true),
                         new InsuranceAiProperties.Security.Pii(true),
@@ -81,7 +83,7 @@ class HybridRetrievalServiceTest {
 
     private LexicalSearchResult lexicalResult(String suffix, double score) {
         return new LexicalSearchResult(chunkId(suffix), documentId, documentVersionId, "lexical content " + suffix,
-                ChunkMetadata.empty(), score);
+                ChunkMetadata.empty(), score, 4, 3);
     }
 
     @Test
@@ -231,7 +233,15 @@ class HybridRetrievalServiceTest {
         serviceWith(true, true).retrieve("burst pipe damage", RetrievalFilter.none());
 
         verify(lexicalSearchPort).search(queryCaptor.capture(), anyInt(), any());
-        assertTrue(queryCaptor.getValue().contains(" OR "), "expanded query must OR in synonym terms");
+        String expandedQuery = queryCaptor.getValue();
+        assertTrue(expandedQuery.startsWith("burst pipe damage"), "the original question must be preserved verbatim");
+        assertTrue(expandedQuery.contains("broken") || expandedQuery.contains("ruptured"),
+                "expanded query must append synonym terms: " + expandedQuery);
+        // Since FASE 28 the terms are space-joined, not " OR "-joined: the lexical adapter
+        // tokenizes the whole string and OR-s every lexeme itself, so a literal "OR" would
+        // survive Spanish tokenization as a searchable lexeme that matches nothing and dilutes
+        // the term-coverage denominator grounding is measured against.
+        assertFalse(expandedQuery.contains(" OR "), "the literal OR operator must not reach the lexical adapter");
     }
 
     @Test

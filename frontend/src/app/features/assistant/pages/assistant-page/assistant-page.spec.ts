@@ -51,7 +51,7 @@ describe('AssistantPage', () => {
       grounding: { status: 'GROUNDED' },
       traceId: 'trace-1',
       piiDetected: false,
-      blocked: false,
+      answerMode: 'DOCUMENT_GROUNDED',
     };
     httpMock.expectOne('/api/chat').flush(answer);
     fixture.detectChanges();
